@@ -1,0 +1,41 @@
+{
+  "name": "cc-fallback",
+  "version": "0.1.0",
+  "description": "Keep Claude Code working when your Claude limit is reached: automatic fallback to free AI APIs and local open-source models.",
+  "type": "module",
+  "bin": {
+    "cc-fallback": "bin/cc-fallback.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "commands",
+    ".claude-plugin",
+    "README.md",
+    "README.tr.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "claude-code",
+    "claude",
+    "proxy",
+    "ollama",
+    "lm-studio",
+    "openrouter",
+    "gemini",
+    "fallback",
+    "llm"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smyrna-pergamum/cc-fallback.git"
+  },
+  "homepage": "https://github.com/smyrna-pergamum/cc-fallback"
+}

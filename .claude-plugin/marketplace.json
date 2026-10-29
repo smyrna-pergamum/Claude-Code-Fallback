@@ -1,0 +1,11 @@
+{
+  "name": "cc-fallback",
+  "owner": { "name": "smyrna-pergamum" },
+  "plugins": [
+    {
+      "name": "cc-fallback",
+      "source": "./",
+      "description": "Status and control for the cc-fallback proxy (free API and local model fallback for Claude Code)."
+    }
+  ]
+}
