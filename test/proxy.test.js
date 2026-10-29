@@ -93,7 +93,7 @@ before(async () => {
       { name: 'claude', type: 'anthropic', baseUrl: `http://127.0.0.1:${cp}` },
       { name: 'free', type: 'openai', baseUrl: `http://127.0.0.1:${op}/v1`, apiKey: 'env:TEST_KEY', model: 'free-model' },
     ],
-  }, { quiet: true }));
+  }, { quiet: true, logPath: null }));
   proxyPort = await listen(proxy);
 });
 after(() => { proxy.close(); mockClaude.close(); mockOpenAI.close(); });

@@ -12,7 +12,7 @@ import { pickInstalled } from './hardware.js';
 const HOP = new Set(['host', 'connection', 'content-length', 'transfer-encoding', 'accept-encoding', 'keep-alive', 'upgrade']);
 const RESP_DROP = new Set(['content-encoding', 'content-length', 'transfer-encoding', 'connection']);
 
-export function createProxy(config = loadConfig(), { quiet = false } = {}) {
+export function createProxy(config = loadConfig(), { quiet = false, logPath = LOG_PATH } = {}) {
   const state = {
     cooldown: new Map(), // provider name -> { until, reason }
     forced: null,
@@ -25,7 +25,8 @@ export function createProxy(config = loadConfig(), { quiet = false } = {}) {
   const log = (msg) => {
     const line = `[${new Date().toISOString()}] ${msg}`;
     if (!quiet) console.error(line);
-    try { mkdirSync(dirname(LOG_PATH), { recursive: true }); appendFileSync(LOG_PATH, line + '\n'); } catch { /* ignore */ }
+    if (!logPath) return;
+    try { mkdirSync(dirname(logPath), { recursive: true }); appendFileSync(logPath, line + '\n'); } catch { /* ignore */ }
   };
 
   const providers = () => config.providers.filter(isConfigured);
