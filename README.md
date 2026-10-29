@@ -27,13 +27,13 @@ Claude Code ──► cc-fallback (127.0.0.1:3456) ──► Claude (your login)
 ## Install
 
 ```bash
-npm install -g github:smyrna-pergamum/cc-fallback
+npm install -g github:smyrna-pergamum/Claude-Code-Fallback
 ```
 
 Then, inside Claude Code, add the plugin (optional, for the slash commands):
 
 ```
-/plugin marketplace add smyrna-pergamum/cc-fallback
+/plugin marketplace add smyrna-pergamum/Claude-Code-Fallback
 /plugin install cc-fallback@cc-fallback
 ```
 

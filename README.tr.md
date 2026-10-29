@@ -20,13 +20,13 @@ Claude kullanım limitiniz dolduğunda **Claude Code** ile çalışmaya devam ed
 ## Kurulum
 
 ```bash
-npm install -g github:smyrna-pergamum/cc-fallback
+npm install -g github:smyrna-pergamum/Claude-Code-Fallback
 ```
 
 Claude Code içinde eklenti (isteğe bağlı, slash komutları için):
 
 ```
-/plugin marketplace add smyrna-pergamum/cc-fallback
+/plugin marketplace add smyrna-pergamum/Claude-Code-Fallback
 /plugin install cc-fallback@cc-fallback
 ```
 

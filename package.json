@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/smyrna-pergamum/cc-fallback.git"
+    "url": "git+https://github.com/smyrna-pergamum/Claude-Code-Fallback.git"
   },
-  "homepage": "https://github.com/smyrna-pergamum/cc-fallback"
+  "homepage": "https://github.com/smyrna-pergamum/Claude-Code-Fallback"
 }
