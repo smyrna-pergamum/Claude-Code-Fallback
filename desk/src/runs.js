@@ -1,6 +1,7 @@
 // One "run" = one prompt sent to Claude Code through the Agent SDK, streamed to the UI as events.
 import { randomUUID } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { claudeBrowserOptions } from './browser.js';
 
 // Variables a host (e.g. the Claude desktop app) sets for its own child sessions; they must not
 // leak into ours, or Claude Code would act as that host's child and skip our proxy.
@@ -37,7 +38,7 @@ export function toEvents(msg) {
       if (b.type === 'tool_result') out.push({ type: 'tool_result', id: b.tool_use_id, text: textOf(b.content), isError: !!b.is_error });
     }
   } else if (msg.type === 'system' && msg.subtype === 'init') {
-    out.push({ type: 'init', model: msg.model, cwd: msg.cwd, permissionMode: msg.permissionMode, slashCommands: msg.slash_commands || [] });
+    out.push({ type: 'init', model: msg.model, cwd: msg.cwd, permissionMode: msg.permissionMode, slashCommands: msg.slash_commands || [], mcp: (msg.mcp_servers || []).map((s) => `${s.name}:${s.status}`) });
   } else if (msg.type === 'result') {
     out.push({
       type: 'result', ok: msg.subtype === 'success' && !msg.is_error, subtype: msg.subtype,
@@ -55,7 +56,8 @@ export class RunManager {
   }
 
   /** engine: 'claude' (default) or 'opencode'; vars: the chosen environment's variables. */
-  start({ prompt, cwd, sessionId, model, permissionMode, engine = 'claude', envId = 'local', vars = {}, dirs = [] }) {
+  /** fallback: Claude Code run options to continue with if OpenCode's free models are at their limit. */
+  start({ prompt, cwd, sessionId, model, permissionMode, engine = 'claude', envId = 'local', vars = {}, dirs = [], browser = false, fallback = null }) {
     const run = {
       id: randomUUID(), sessionId: sessionId || null, cwd, engine, events: [], clients: new Set(),
       pending: new Map(), done: false, q: null, abort: new AbortController(), stop: null,
@@ -76,9 +78,23 @@ export class RunManager {
     };
 
     if (engine === 'opencode') {
-      this.opencode.prompt(run, { prompt, cwd, sessionId, model, permissionMode, envId, vars, dirs })
+      run.hasFallback = !!fallback;
+      this.opencode.prompt(run, { prompt, cwd, sessionId, model, permissionMode, envId, vars, dirs, browser })
         .catch((e) => emit({ type: 'error', message: e.message }))
-        .finally(finish);
+        .then(() => {
+          if (!(run.limitHit && fallback)) return finish();
+          this.onOpenCodeLimit?.();
+          // Same chat, same stream: the message goes on in Claude Code through cc-fallback.
+          emit({ type: 'notice', text: "OpenCode's free models are at their usage limit too. Continuing with Claude Code through cc-fallback's free providers." });
+          emit({ type: 'engine', engine: 'claude' });
+          const inner = this.start(fallback);
+          run.delegate = inner;
+          run.stop = () => this.interrupt(inner.id);
+          inner.clients.add({
+            write: (line) => { const ev = JSON.parse(line.slice(6)); if (ev.type !== 'done') emit(ev); },
+            end: () => finish(),
+          });
+        });
       return run;
     }
 
@@ -106,6 +122,7 @@ export class RunManager {
         settings: { env: { ANTHROPIC_BASE_URL: this.baseUrl(), CLAUDE_CODE_ATTRIBUTION_HEADER: '0', ...vars } },
         abortController: run.abort,
         canUseTool,
+        ...(browser ? claudeBrowserOptions() : {}),
         stderr: (d) => { if (/error/i.test(d)) emit({ type: 'log', text: d.slice(0, 500) }); },
       },
     });
@@ -146,6 +163,7 @@ export class RunManager {
 
   answer(runId, permId, decision) {
     const run = this.runs.get(runId);
+    if (run?.delegate && !run.pending.has(permId)) return this.answer(run.delegate.id, permId, decision);
     const p = run?.pending.get(permId);
     if (!p) return false;
     run.pending.delete(permId);

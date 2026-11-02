@@ -2,11 +2,12 @@
 // its event stream into the same UI events Claude Code runs produce.
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { opencodeBrowserConfig } from './browser.js';
 
 const require = createRequire(import.meta.url);
 const DATA = join(homedir(), '.cc-desk', 'opencode');
@@ -31,12 +32,13 @@ const freePort = () => new Promise((resolve, reject) => {
 
 // Ask before edits, commands and web fetches, like Claude Code; CC Desk's permission mode
 // decides per request whether to answer automatically.
-const PERMISSION = JSON.stringify({ edit: 'ask', bash: 'ask', webfetch: 'ask' });
+const PERMISSION = { edit: 'ask', bash: 'ask', webfetch: 'ask' };
 
 export class OpenCode {
   constructor() {
     this.servers = new Map(); // environment id -> { proc, base, auth, ready }
     this.limits = new Map(); // "provider/model" -> context window (tokens)
+    this.browser = false; // give OpenCode the browser tools (set by the server)
     process.on('exit', () => this.stopAll());
   }
 
@@ -56,10 +58,14 @@ export class OpenCode {
       const env = {};
       for (const [k, v] of Object.entries(process.env)) if (!HOST_ENV.test(k)) env[k] = v;
       const xdg = (name) => { const p = join(DATA, name); mkdirSync(p, { recursive: true }); return p; };
+      const browser = this.browser ? opencodeBrowserConfig() : { mcp: {}, permission: {} };
+      const configDir = join(xdg('config'), 'opencode');
+      mkdirSync(configDir, { recursive: true });
+      writeFileSync(join(configDir, 'opencode.json'), JSON.stringify({ $schema: 'https://opencode.ai/config.json', mcp: browser.mcp }, null, 2));
       Object.assign(env, vars, {
         // Its own data folder: CC Desk's OpenCode never clashes with another OpenCode install.
         XDG_DATA_HOME: xdg('data'), XDG_CONFIG_HOME: xdg('config'), XDG_STATE_HOME: xdg('state'), XDG_CACHE_HOME: xdg('cache'),
-        OPENCODE_SERVER_PASSWORD: password, OPENCODE_PERMISSION: PERMISSION,
+        OPENCODE_SERVER_PASSWORD: password, OPENCODE_PERMISSION: JSON.stringify({ ...PERMISSION, ...browser.permission }),
       });
       entry.proc = spawn(bin, ['serve', '--port', String(port), '--hostname', '127.0.0.1'], { env, stdio: 'ignore', windowsHide: true });
       entry.proc.on('exit', () => { if (this.servers.get(envId) === entry) this.servers.delete(envId); });
@@ -210,6 +216,17 @@ export class OpenCode {
           } else if (e.type === 'session.error') {
             const err = p.error || {};
             if (err.name !== 'MessageAbortedError') run.emit({ type: 'error', message: err.data?.message || err.name || 'OpenCode error' });
+          } else if (e.type === 'session.status' && p.status?.type === 'retry') {
+            // OpenCode retries quietly on its own; a usage limit won't clear by retrying, so stop and say so.
+            const msg = p.status.message || 'OpenCode is retrying';
+            if (/usage limit|quota|insufficient|subscribe/i.test(msg)) {
+              run.limitHit = true;
+              if (!run.hasFallback) run.emit({ type: 'error', message: `OpenCode: ${msg}\nPick another model, or try again later.` });
+              await run.stop();
+              ac.abort();
+              return;
+            }
+            if (!run.retryShown) { run.retryShown = true; run.emit({ type: 'notice', text: `OpenCode is retrying: ${msg}` }); }
           } else if (e.type === 'session.idle') {
             run.emit({ type: 'result', ok: true, subtype: 'success' });
             ac.abort();

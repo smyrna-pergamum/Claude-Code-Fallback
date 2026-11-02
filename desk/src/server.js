@@ -81,7 +81,10 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
   const state = loadState();
   let proxyUp = await ensureProxy();
   const opencode = new OpenCode();
+  opencode.browser = state.browser !== false;
   const runs = new RunManager({ baseUrl: () => (proxyUp ? proxyBase() : DIRECT), opencode });
+  let ocLimitedUntil = 0;
+  runs.onOpenCodeLimit = () => { ocLimitedUntil = Date.now() + 60 * 60_000; };
 
   const json = (res, code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
   const body = async (req) => {
@@ -137,7 +140,9 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
       const link = { claude: null, opencode: null, active: engine, ...(b.link || {}) };
       if (engine === 'claude' && !b.link) link.claude = b.sessionId || null;
       let prompt = b.prompt, model = b.model, handover = null;
-      if (engine === 'claude' && state.handover !== false && opencode.available && proxyUp) {
+      // Skip the handover for a while once OpenCode's free models answered with their own limit.
+      const ocFree = Date.now() > ocLimitedUntil;
+      if (engine === 'claude' && state.handover !== false && opencode.available && proxyUp && (ocFree || link.active === 'opencode')) {
         const lim = claudeLimit(await proxyStatus());
         const ocModel = state.handoverModel || HANDOVER_MODEL;
         if (lim.limited) {
@@ -159,11 +164,23 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
       const dirs = (Array.isArray(b.dirs) ? b.dirs : []).map((d) => resolve(String(d)))
         .filter((d) => d !== cwd && existsSync(d) && statSync(d).isDirectory());
       if (prompt.includes(UPLOADS) && existsSync(UPLOADS)) dirs.push(UPLOADS);
-      const run = runs.start({
-        prompt, cwd, sessionId: link[engine], model, permissionMode: b.permissionMode,
-        engine, envId, vars: await environmentVars(envId), dirs,
-      });
+      const vars = await environmentVars(envId);
+      const common = { cwd, permissionMode: b.permissionMode, envId, vars, dirs, browser: state.browser !== false };
+      // A handed-over chat falls back to Claude Code (through cc-fallback's free providers)
+      // if OpenCode's free models are at their limit too.
+      const fallback = b.engine !== 'opencode' && engine === 'opencode'
+        ? { ...common, prompt: b.prompt, sessionId: link.claude, model: b.model, engine: 'claude' } : null;
+      const run = runs.start({ ...common, prompt, sessionId: link[engine], model, engine, fallback });
       return json(res, 200, { runId: run.id, viaProxy: proxyUp, engine, link, handover });
+    }
+    if (req.method === 'GET' && p === '/api/browser') return json(res, 200, { enabled: state.browser !== false });
+    if (req.method === 'POST' && p === '/api/browser') {
+      const b = await body(req);
+      state.browser = !!b.enabled;
+      await saveState(state);
+      opencode.browser = state.browser;
+      opencode.stopAll(); // its MCP servers come from the config written at start
+      return json(res, 200, { enabled: state.browser });
     }
     if (req.method === 'GET' && p === '/api/handover') {
       return json(res, 200, { enabled: state.handover !== false, model: state.handoverModel || HANDOVER_MODEL, available: opencode.available });

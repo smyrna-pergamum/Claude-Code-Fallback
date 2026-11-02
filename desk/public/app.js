@@ -78,8 +78,13 @@ function setWorking(on, label = 'Working…') {
   } else state.working?.remove();
 }
 
+// "mcp__browser__browser_click" (Claude Code) / "browser_browser_click" (OpenCode) -> "Browser · click"
+function toolLabel(name = '') {
+  const m = String(name).match(/^(?:mcp__browser__|browser_)browser_(.+)$/);
+  return m ? `Browser · ${m[1].replace(/_/g, ' ')}` : name;
+}
 function toolSummary(input = {}) {
-  const v = input.command || input.file_path || input.path || input.pattern || input.url || input.description || input.query
+  const v = input.url || input.element || input.text || input.command || input.file_path || input.path || input.pattern || input.url || input.description || input.query
     || Object.values(input).find((x) => typeof x === 'string') || '';
   return String(v).split('\n')[0].slice(0, 200);
 }
@@ -120,7 +125,7 @@ function render(ev) {
       finishLive();
       const d = document.createElement('details');
       d.className = `tool msg${state.runId ? ' running' : ''}`;
-      d.innerHTML = `<summary><span class="bullet"></span><span class="name">${esc(ev.name)}</span><span class="sum">${esc(toolSummary(ev.input))}</span><span class="chev">▶</span></summary>
+      d.innerHTML = `<summary><span class="bullet"></span><span class="name">${esc(toolLabel(ev.name))}</span><span class="sum">${esc(toolSummary(ev.input))}</span><span class="chev">▶</span></summary>
         <div class="body"><pre class="in"></pre></div>`;
       d.querySelector('.in').textContent = JSON.stringify(ev.input, null, 2);
       state.tools.set(ev.id, d);
@@ -164,6 +169,8 @@ function render(ev) {
       if (!ev.ok) add(div('msg meta')).textContent = `Stopped (${ev.subtype})`;
       break;
     case 'error': finishLive(); add(div('msg error')).textContent = ev.message; break;
+    case 'notice': add(div('msg meta')).textContent = ev.text; break;
+    case 'engine': state.runEngine = ev.engine; if (state.link) state.link.active = ev.engine; break;
     case 'done': runEnded(); break;
     default: break;
   }
@@ -179,7 +186,7 @@ function renderPermission(ev) {
   const card = div('perm msg');
   card.dataset.perm = ev.id;
   const target = toolSummary(ev.input);
-  card.innerHTML = `<div class="q">Allow ${agentName()} to use <code>${esc(ev.toolName)}</code>${target ? ` on <code>${esc(target.slice(0, 80))}</code>` : ''}?</div>
+  card.innerHTML = `<div class="q">Allow ${agentName()} to use <code>${esc(toolLabel(ev.toolName))}</code>${target ? ` on <code>${esc(target.slice(0, 80))}</code>` : ''}?</div>
     ${ev.reason ? `<div class="why">${esc(ev.reason)}</div>` : ''}
     <pre></pre>
     <div class="btns"><button class="btn primary" data-d="allow">Allow once</button>
@@ -607,4 +614,13 @@ setEngine('claude');
   if (!h || !h.available) { box.closest('.env-row').hidden = true; return; }
   box.checked = h.enabled;
   box.addEventListener('change', () => api('/api/handover', { method: 'POST', body: { enabled: box.checked } }).catch((e) => alert(e.message)));
+})();
+
+// ---- browser control setting ----
+(async () => {
+  const b = await api('/api/browser').catch(() => null);
+  const box = $('browserOn');
+  if (!b) { box.closest('.rp-check').hidden = true; return; }
+  box.checked = b.enabled;
+  box.addEventListener('change', () => api('/api/browser', { method: 'POST', body: { enabled: box.checked } }).catch((e) => alert(e.message)));
 })();
