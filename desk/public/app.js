@@ -37,6 +37,8 @@ function md(text) {
       if (lines.every((l) => /^\s*([-*]|\d+\.)\s/.test(l))) {
         const tag = /^\s*\d+\./.test(lines[0]) ? 'ol' : 'ul';
         out.push(`<${tag}>${lines.map((l) => `<li>${inline(l.replace(/^\s*([-*]|\d+\.)\s/, ''))}</li>`).join('')}</${tag}>`);
+      } else if (lines.every((l) => /^>\s?/.test(l))) {
+        out.push(`<blockquote>${lines.map((l) => inline(l.replace(/^>\s?/, ''))).join('<br>')}</blockquote>`);
       } else if (/^#{1,4}\s/.test(lines[0]) && lines.length === 1) {
         out.push(`<h3>${inline(lines[0].replace(/^#+\s/, ''))}</h3>`);
       } else if (lines[0].startsWith('|')) {
@@ -176,17 +178,24 @@ function runEnded() {
 }
 
 async function send(text) {
-  if (!text.trim() || state.runId) return;
+  if (!text.trim() && !pendingFiles.length || state.runId) return;
   if (!state.cwd) { alert('Pick a folder first.'); return; }
-  render({ type: 'user', text });
-  if (!state.sessionId) $('title').textContent = text.split('\n')[0].slice(0, 80);
+  let full = text;
+  if (pendingFiles.length) {
+    const paths = pendingFiles.map((f) => f.path).join('\n');
+    full = (full ? full + '\n\n' : '') + `Attached files (paths on this machine):\n${paths}`;
+  }
+  render({ type: 'user', text: full });
+  if (!state.sessionId) $('title').textContent = (text || pendingFiles[0]?.name || 'Attachment').slice(0, 80);
   setBusy(true);
   setWorking(true, 'Thinking…');
   try {
     const { runId, viaProxy } = await api('/api/send', {
       method: 'POST',
-      body: { prompt: text, cwd: state.cwd, sessionId: state.sessionId, model: $('model').value, permissionMode: $('mode').value },
+      body: { prompt: full, cwd: state.cwd, sessionId: state.sessionId, model: $('model').value, effort: $('effort').value || undefined, permissionMode: $('mode').value },
     });
+    pendingFiles = [];
+    renderAttachments();
     if (!viaProxy) add(div('msg meta')).textContent = 'cc-fallback is not running: this message goes straight to Claude, without fallback.';
     state.runId = runId;
     state.source = new EventSource(`/api/runs/${runId}/events?token=${token}`);
@@ -200,6 +209,28 @@ async function send(text) {
 }
 
 const promptEl = $('prompt');
+const attachmentsEl = $('attachments');
+let pendingFiles = [];
+function renderAttachments() {
+  if (!pendingFiles.length) { attachmentsEl.hidden = true; attachmentsEl.innerHTML = ''; return; }
+  attachmentsEl.hidden = false;
+  attachmentsEl.innerHTML = pendingFiles.map((f, i) => `<span class="chip">${esc(f.name)} <button type="button" data-i="${i}" title="Remove">×</button></span>`).join('');
+  attachmentsEl.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { pendingFiles.splice(Number(b.dataset.i), 1); renderAttachments(); }));
+}
+async function uploadFile(file) {
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  const res = await fetch('/api/upload', { method: 'POST', headers: { 'x-desk-token': token }, body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  pendingFiles.push({ name: file.name, path: data.path });
+  renderAttachments();
+}
+$('attach').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', async (e) => {
+  for (const f of e.target.files) { try { await uploadFile(f); } catch (err) { alert(err.message); } }
+  e.target.value = '';
+});
 const grow = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${promptEl.scrollHeight}px`; };
 promptEl.addEventListener('input', grow);
 $('composer').addEventListener('submit', (e) => {
@@ -321,11 +352,42 @@ $('statusBtn').addEventListener('click', () => {
 document.addEventListener('click', (e) => { if (!e.target.closest('#status')) $('statusPanel').hidden = true; });
 $('settingsBtn').addEventListener('click', () => openSettings());
 
+// ---- Claude login ----
+async function checkLogin() {
+  const s = await api('/api/auth').catch(() => ({ loggedIn: true })); // unknown: don't nag
+  $('loginBar').hidden = s.loggedIn;
+  return s.loggedIn;
+}
+$('loginBtn').addEventListener('click', async () => {
+  const r = await api('/api/auth/login', { method: 'POST' });
+  if (!r.started) { alert(`Run this in a terminal, then come back:\n\n${r.command}`); return; }
+  $('loginBtn').textContent = 'Finish in the browser and the console window…';
+  $('loginBtn').disabled = true;
+  const timer = setInterval(async () => {
+    if (await checkLogin()) { clearInterval(timer); $('loginBtn').disabled = false; $('loginBtn').textContent = 'Log in to Claude'; }
+  }, 3000);
+});
+
+// Demo mode (?demo=1): lets the screenshot script fill the UI without real sessions.
+const demo = new URLSearchParams(location.search).has('demo');
+if (demo) {
+  window.ccDeskDemo = {
+    render, clearChat, setWorking, fillModels,
+    folder(label) { state.cwd = label; $('folderName').textContent = label; },
+    sessions(list) {
+      $('sessions').innerHTML = list.map((s, i) => `<li class="${i === 0 ? 'active' : ''}"><div class="t">${esc(s[0])}</div><div class="d">${esc(s[1])}</div></li>`).join('');
+    },
+    status(text, cls) { $('dot').className = `dot ${cls}`; $('statusText').textContent = text; },
+  };
+}
+
 // ---- start ----
 (async () => {
   const info = await api('/api/info');
   setFolder(info.defaultDir);
+  if (demo) return;
   refreshStatus();
   setInterval(refreshStatus, 5000);
+  checkLogin();
   promptEl.focus();
 })();

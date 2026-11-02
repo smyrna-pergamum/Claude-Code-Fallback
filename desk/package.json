@@ -1,24 +1,58 @@
 {
   "name": "cc-desk",
-  "version": "0.1.0",
-  "description": "A small desktop app for Claude Code that runs through the cc-fallback proxy",
+  "productName": "CC Desk",
+  "version": "0.3.0",
+  "description": "Desktop app for Claude Code that runs through the cc-fallback proxy",
+  "author": "smyrna-pergamum",
+  "homepage": "https://github.com/smyrna-pergamum/Claude-Code-Fallback",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "start": "electron .",
     "web": "node src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "assets": "electron scripts/render-assets.cjs",
+    "dist": "electron-builder --win nsis"
   },
   "license": "MIT",
   "private": true,
   "allowScripts": {
     "electron": true,
-    "@anthropic-ai/claude-agent-sdk": true
+    "@anthropic-ai/claude-agent-sdk": true,
+    "electron-winstaller": true
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.316"
   },
   "devDependencies": {
-    "electron": "^45.2.1"
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "io.github.smyrna-pergamum.ccdesk",
+    "productName": "CC Desk",
+    "copyright": "MIT License, smyrna-pergamum",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["electron/**", "src/**", "public/**", "package.json"],
+    "asar": false,
+    "extraResources": [
+      { "from": "../bin", "to": "cc-fallback/bin" },
+      { "from": "../src", "to": "cc-fallback/src" },
+      { "from": "../package.json", "to": "cc-fallback/package.json" }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CC Desk",
+      "artifactName": "CC-Desk-Setup-${version}.exe",
+      "license": "../LICENSE"
+    }
   }
 }

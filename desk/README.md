@@ -19,11 +19,19 @@ The Claude desktop app gives its sessions its own API address, so it can't use c
   - add local AI: Ollama, LM Studio, llama.cpp, or any local URL
   - **Test & list models** checks the address and key and fills the model list
   - reorder providers and switch them on and off; **Save** writes `~/.cc-fallback/config.json` and the proxy reloads it at once
+- **+** to attach files to a message
+- **Log in to Claude** from inside the app (no separate Claude Code install needed)
 - Local only: the server listens on 127.0.0.1 with a per-launch token
 
-## Install
+![CC Desk](../docs/screenshots/chat-light.png)
 
-Needs Node 18+ and a logged-in Claude Code (`claude` → log in once). The proxy is the parent folder of this one; the app starts it when needed.
+## Download (Windows)
+
+Get `CC-Desk-Setup-<version>.exe` from the [latest release](https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest). It includes the proxy and Claude Code, so it needs neither Node nor a terminal. The installer isn't code-signed yet: if SmartScreen warns, click **More info → Run anyway**.
+
+## Run from source
+
+Needs Node 18+. The proxy is the parent folder of this one; the app starts it when needed, and offers a **Log in to Claude** button if you aren't logged in.
 
 From the repository root:
 
@@ -53,6 +61,18 @@ Browser mode (no Electron): `npm run web` prints a local URL.
 - For personal use with your own Claude login. Distributing an app that signs other people in with their Claude subscription may conflict with Anthropic's terms.
 - Not a replacement for the official app: no diff viewer, browser pane, parallel sessions or plugins UI.
 
+## Building the installer
+
+```bash
+npm run assets
+```
+
+```bash
+npm run dist
+```
+
+`assets` renders `build/icon.png` and the README screenshots (`../docs/screenshots`) from demo content; `dist` writes `dist/CC-Desk-Setup-<version>.exe` with the proxy from the parent folder bundled in.
+
 ## Türkçe
 
 CC Desk, cc-fallback'in Claude Code için masaüstü uygulaması. Tüm istekleri cc-fallback üzerinden gönderir: önce Claude aboneliğin kullanılır, limit dolunca ücretsiz modeller otomatik devreye girer. Claude masaüstü uygulaması oturumlarına kendi adresini verdiği için cc-fallback'i kullanamıyor; CC Desk gerçek Claude Code'u çalıştırıp proxy'ye yönlendirir.
@@ -61,4 +81,4 @@ CC Desk, cc-fallback'in Claude Code için masaüstü uygulaması. Tüm istekleri
 - Eski oturumların (masaüstü uygulaması ve terminal dahil) klasöre göre listelenir; birini açıp devam edebilirsin.
 - Model seçici (Claude ya da doğrudan ücretsiz model) ve cc-fallback durum çubuğu.
 - **Models & API keys** (sol altta): hazır sağlayıcılara anahtar ekle, kendi API'ni ekle (OpenAI veya Anthropic uyumlu), yerel yapay zekâ ekle (Ollama, LM Studio, llama.cpp ya da herhangi bir yerel adres), bağlantıyı test et, sırala ve aç/kapat. Kaydedince proxy hemen yeniden yükler. Anahtarlar bu bilgisayarda `~/.cc-fallback/config.json` içinde düz metin olarak saklanır.
-- Kurulum: repo kökünde `npm run desk`. Masaüstü kısayolu için bu klasörde: `cscript scripts\create-shortcut.vbs`.
+- Windows kurulum dosyası: [son sürüm](https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest) (Node gerekmez; uygulama içinden **Log in to Claude** ile giriş yapılır). Kaynaktan: repo kökünde `npm run desk`. Masaüstü kısayolu için bu klasörde: `cscript scripts\create-shortcut.vbs`.

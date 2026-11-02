@@ -9,7 +9,7 @@ const HOST_ENV = /^(CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_AGENT_SDK_.*|ANTHROPIC_BASE
 export function childEnv(baseUrl) {
   const env = {};
   for (const [k, v] of Object.entries(process.env)) if (!HOST_ENV.test(k)) env[k] = v;
-  env.ANTHROPIC_BASE_URL = baseUrl;
+  if (baseUrl) env.ANTHROPIC_BASE_URL = baseUrl;
   // The attribution line is for Anthropic only; it should not reach free providers.
   env.CLAUDE_CODE_ATTRIBUTION_HEADER = '0';
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'cc-desk/0.1.0';

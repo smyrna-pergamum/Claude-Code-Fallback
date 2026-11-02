@@ -1,13 +1,23 @@
+<p align="center"><img src="desk/build/icon.png" width="96" alt="cc-fallback icon"></p>
+
 # Claude Code - Fallback
 
 Keep **Claude Code** working when your Claude usage limit is reached.
+
+<p align="center">
+  <a href="https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest"><b>⬇ Download CC Desk for Windows</b></a>
+  ·
+  <a href="#install">Install the proxy</a>
+  ·
+  <a href="README.tr.md">Türkçe</a>
+</p>
+
+![CC Desk: Claude Code through cc-fallback; Claude hit its limit and Gemini answers](docs/screenshots/chat-light.png)
 
 cc-fallback has two parts:
 
 - **The proxy** (zero dependencies, Node 18+): Claude Code talks to it; it sends each request to Claude as usual, and when Claude answers with a limit error it switches to the next provider in your list: free cloud APIs (Gemini, Z AI, NVIDIA, Cerebras, Mistral, Groq, OpenRouter, Cloudflare, plus keyless Kilo and LLM7), any API you add, or open-source models on your own computer (Ollama, LM Studio, llama.cpp). When the limit resets, it goes back to Claude by itself. It comes with a Claude Code plugin for status and control.
 - **CC Desk** ([`desk/`](desk/)): a desktop app for Claude Code that always runs through the proxy, with a screen to add API keys, your own APIs and local AI.
-
-[Türkçe README](README.tr.md)
 
 ```
 Claude Code (terminal) ─┐
@@ -30,6 +40,14 @@ CC Desk (desktop app) ──┴─► cc-fallback (127.0.0.1:3456) ──► Cla
 - **Claude Code plugin**: `/fallback-status`, `/fallback-use`, `/fallback-reset`, `/fallback-scan`.
 - **CC Desk desktop app**: Claude Code look, approvals, your old sessions (desktop app and terminal ones too), model picker, live status, and a **Models & API keys** screen.
 - Your Claude login token is only ever forwarded to Anthropic, never to other providers.
+
+## Download (Windows)
+
+The easiest way: **[CC-Desk-Setup.exe from the latest release](https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest)**. It installs CC Desk with the proxy and Claude Code built in, so you don't need Node or a terminal. On first start, click **Log in to Claude**.
+
+The installer isn't code-signed yet, so Windows SmartScreen may say "Windows protected your PC": click **More info → Run anyway**.
+
+For terminal use, macOS or Linux, install the proxy below.
 
 ## Requirements
 
@@ -168,7 +186,11 @@ Windows shortcuts on the Desktop and in the Start menu (after the first `npm run
 cscript desk\scripts\create-shortcut.vbs
 ```
 
-More in [desk/README.md](desk/README.md).
+| Dark theme | Models & API keys |
+|---|---|
+| ![CC Desk in dark mode](docs/screenshots/chat-dark.png) | ![The Models & API keys screen](docs/screenshots/settings.png) |
+
+On Windows you can also just run the installer from the [latest release](https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest). More in [desk/README.md](desk/README.md).
 
 ## Configuration
 

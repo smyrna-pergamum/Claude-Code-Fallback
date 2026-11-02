@@ -2,6 +2,8 @@
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { tmpdir } from 'node:os';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname, extname, resolve } from 'node:path';
@@ -10,6 +12,7 @@ import { listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk
 import { RunManager } from './runs.js';
 import { proxyBase, isUp, ensureProxy, proxyStatus, proxyCommand } from './fallback.js';
 import { getProviders, saveProviders, testProvider } from './settings.js';
+import { authStatus, startLogin } from './auth.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const STATE_PATH = join(homedir(), '.cc-desk', 'state.json');
@@ -101,6 +104,8 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
     if (req.method === 'POST' && (r = m(/^\/api\/runs\/([\w-]+)\/interrupt$/))) {
       return json(res, 200, { ok: await runs.interrupt(r[1]) });
     }
+    if (req.method === 'GET' && p === '/api/auth') return json(res, 200, await authStatus());
+    if (req.method === 'POST' && p === '/api/auth/login') return json(res, 200, startLogin());
     if (req.method === 'GET' && p === '/api/providers') {
       try { return json(res, 200, await getProviders()); } catch (e) { return json(res, 500, { error: e.message }); }
     }
@@ -112,6 +117,44 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
     if (req.method === 'POST' && p === '/api/fallback/start') { proxyUp = await ensureProxy(); return json(res, 200, { up: proxyUp }); }
     if (req.method === 'POST' && (r = m(/^\/api\/fallback\/(use|reset)$/))) {
       try { return json(res, 200, await proxyCommand(r[1], await body(req))); } catch (e) { return json(res, 502, { error: e.message }); }
+    }
+    if (req.method === 'POST' && p === '/api/upload') {
+      // multipart/form-data single file
+      const ct = req.headers['content-type'] || '';
+      const m = ct.match(/boundary=(.+)$/);
+      if (!m) return json(res, 400, { error: 'no boundary' });
+      const boundary = m[1].replace(/^"|"$/g, '');
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      const buf = Buffer.concat(chunks);
+      const delim = Buffer.from('--' + boundary);
+      // find file part
+      let idx = 0;
+      while (true) {
+        const start = buf.indexOf(delim, idx);
+        if (start < 0) break;
+        const next = buf.indexOf(delim, start + delim.length);
+        const part = buf.slice(start, next < 0 ? buf.length : next);
+        const headerEnd = part.indexOf('\r\n\r\n');
+        if (headerEnd > 0) {
+          const headers = part.slice(0, headerEnd).toString('utf8');
+          const fnm = headers.match(/filename="([^"]*)"/);
+          if (fnm) {
+            const name = fnm[1] || 'file';
+            const data = part.slice(headerEnd + 4);
+            // strip trailing CRLF
+            const clean = data.endsWith(Buffer.from('\r\n')) ? data.slice(0, -2) : data;
+            const dir = join(tmpdir(), 'cc-desk-uploads');
+            await mkdir(dir, { recursive: true });
+            const path = join(dir, `${randomUUID()}-${name.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+            await writeFile(path, clean);
+            return json(res, 200, { path, name });
+          }
+        }
+        idx = start + delim.length;
+        if (next < 0) break;
+      }
+      return json(res, 400, { error: 'no file' });
     }
     json(res, 404, { error: 'not found' });
   }

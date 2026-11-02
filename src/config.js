@@ -50,8 +50,10 @@ export const DEFAULT_CONFIG = {
       apiKey: 'env:MISTRAL_API_KEY', model: 'mistral-medium-latest', smallModel: 'mistral-small-latest', maxTokens: 16000, contextWindow: 128000,
     },
     {
+      // The free tier allows ~8k tokens per minute and answers bigger requests with HTTP 413,
+      // so only small (mostly background) requests go here.
       name: 'groq', type: 'openai', baseUrl: 'https://api.groq.com/openai/v1',
-      apiKey: 'env:GROQ_API_KEY', model: 'openai/gpt-oss-120b', smallModel: 'openai/gpt-oss-20b', maxTokens: 8192, contextWindow: 131000,
+      apiKey: 'env:GROQ_API_KEY', model: 'openai/gpt-oss-120b', smallModel: 'openai/gpt-oss-20b', maxTokens: 4096, contextWindow: 6000,
     },
     {
       name: 'openrouter', type: 'openai', baseUrl: 'https://openrouter.ai/api/v1',

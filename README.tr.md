@@ -1,13 +1,23 @@
+<p align="center"><img src="desk/build/icon.png" width="96" alt="cc-fallback simgesi"></p>
+
 # Claude Code - Fallback
 
 Claude kullanım limitin dolduğunda **Claude Code** ile çalışmaya devam et.
+
+<p align="center">
+  <a href="https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest"><b>⬇ CC Desk'i Windows için indir</b></a>
+  ·
+  <a href="#kurulum">Proxy'yi kur</a>
+  ·
+  <a href="README.md">English</a>
+</p>
+
+![CC Desk: Claude Code, cc-fallback üzerinden; Claude limite takıldı ve Gemini cevap veriyor](docs/screenshots/chat-light.png)
 
 cc-fallback iki parçadan oluşur:
 
 - **Proxy** (bağımlılık yok, Node 18+): Claude Code onunla konuşur. Proxy her isteği normal şekilde Claude'a gönderir; Claude limit hatası verince listendeki bir sonraki sağlayıcıya geçer: ücretsiz bulut API'leri (Gemini, Z AI, NVIDIA, Cerebras, Mistral, Groq, OpenRouter, Cloudflare ve anahtarsız Kilo, LLM7), kendi eklediğin API'ler ya da bilgisayarında çalışan açık kaynak modeller (Ollama, LM Studio, llama.cpp). Limit sıfırlanınca kendiliğinden Claude'a döner. Durum ve kontrol için bir Claude Code eklentisiyle gelir.
 - **CC Desk** ([`desk/`](desk/)): Claude Code için her zaman proxy üzerinden çalışan bir masaüstü uygulaması. API anahtarı, kendi API'ni ve yerel yapay zekâ eklemek için bir ekranı var.
-
-[English README](README.md)
 
 ```
 Claude Code (terminal) ─┐
@@ -30,6 +40,14 @@ CC Desk (masaüstü) ─────┴─► cc-fallback (127.0.0.1:3456) ─�
 - **Claude Code eklentisi**: `/fallback-status`, `/fallback-use`, `/fallback-reset`, `/fallback-scan`.
 - **CC Desk masaüstü uygulaması**: Claude Code görünümü, onaylar, eski oturumların (masaüstü uygulaması ve terminal dahil), model seçici, canlı durum ve **Models & API keys** ekranı.
 - Claude oturum anahtarın yalnızca Anthropic'e iletilir, başka sağlayıcıya asla gönderilmez.
+
+## İndir (Windows)
+
+En kolay yol: **[son sürümdeki CC-Desk-Setup.exe](https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest)**. CC Desk'i proxy ve Claude Code ile birlikte kurar; Node ya da terminal gerekmez. İlk açılışta **Log in to Claude** düğmesine bas.
+
+Kurulum dosyası henüz kod imzalı değil, bu yüzden Windows SmartScreen "Windows kişisel bilgisayarınızı korudu" diyebilir: **Ek bilgi → Yine de çalıştır**'a bas.
+
+Terminalde kullanmak, macOS veya Linux için aşağıdan proxy'yi kur.
 
 ## Gerekenler
 
@@ -168,7 +186,11 @@ Masaüstü ve Başlat menüsü kısayolları (Windows, ilk `npm run desk`'ten so
 cscript desk\scripts\create-shortcut.vbs
 ```
 
-Ayrıntılar: [desk/README.md](desk/README.md).
+| Koyu tema | Models & API keys |
+|---|---|
+| ![CC Desk koyu temada](docs/screenshots/chat-dark.png) | ![Models & API keys ekranı](docs/screenshots/settings.png) |
+
+Windows'ta [son sürümdeki](https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest) kurulum dosyasını da çalıştırabilirsin. Ayrıntılar: [desk/README.md](desk/README.md).
 
 ## Ayarlar
 

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e5906f"/>
+      <stop offset="1" stop-color="#c25a37"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg)"/>
+  <!-- prompt chevron -->
+  <path d="M104 186 L164 256 L104 326" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the route: one path that forks into a main and a fallback branch -->
+  <g fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M206 256 H262 C300 256 306 170 352 170 H392"/>
+    <path d="M262 256 C300 256 306 342 352 342 H392" stroke-opacity=".62"/>
+    <path d="M366 136 L400 170 L366 204"/>
+    <path d="M366 308 L400 342 L366 376" stroke-opacity=".62"/>
+  </g>
+  <circle cx="206" cy="256" r="22" fill="#fff"/>
+</svg>

@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CC Desk</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
 </head>
 <body>
   <aside id="sidebar">
-    <div class="brand"><span class="spark" aria-hidden="true">✳</span> CC Desk</div>
+    <div class="brand"><img src="icon.svg" alt="" class="logo"> CC Desk</div>
     <button id="newChat" class="nav-btn"><span class="ico">＋</span> New session</button>
     <button id="folderBtn" class="nav-btn folder-btn" title="Change folder">
       <span class="ico">▤</span><span id="folderName" class="folder-name">…</span>
@@ -28,10 +29,16 @@
       <span id="runState"></span>
     </header>
     <section id="chat" aria-live="polite"></section>
+    <div id="loginBar" class="login-bar" hidden>
+      <span>Sign in to Claude once to start. Your subscription is used first; free models take over at the limit.</span>
+      <button id="loginBtn" class="btn primary">Log in to Claude</button>
+    </div>
     <form id="composer">
       <div class="box">
         <textarea id="prompt" rows="1" placeholder="Ask Claude Code to do something…"></textarea>
         <div class="controls">
+          <button type="button" id="attach" class="round attach" title="Attach files">+</button>
+          <input type="file" id="fileInput" multiple hidden>
           <select id="mode" class="pill" title="Permission mode">
             <option value="default">Ask before edits</option>
             <option value="acceptEdits">Auto-accept edits</option>
@@ -41,9 +48,18 @@
           </select>
           <span class="spacer"></span>
           <select id="model" class="pill" title="Model"></select>
+          <select id="effort" class="pill" title="Effort">
+            <option value="">Default effort</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">Extra high</option>
+            <option value="max">Max</option>
+          </select>
           <button type="button" id="stop" class="round stop" title="Stop" hidden>■</button>
           <button type="submit" id="send" class="round send" title="Send (Enter)">↑</button>
         </div>
+        <div id="attachments" class="attachments" hidden></div>
       </div>
       <div class="foot-hint">Enter to send · Shift+Enter for a new line</div>
     </form>

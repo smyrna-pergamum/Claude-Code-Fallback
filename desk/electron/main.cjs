@@ -11,6 +11,7 @@ async function createWindow() {
   const { url } = await startServer({ quiet: true });
   win = new BrowserWindow({
     width: 1280, height: 860, minWidth: 760, minHeight: 520, title: 'CC Desk', autoHideMenuBar: true,
+    icon: path.join(__dirname, '..', 'public', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true },
   });
   // Links open in the real browser, never inside the app.
