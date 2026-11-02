@@ -1,9 +1,11 @@
 // CC Desk UI: sessions sidebar, streaming chat, tool approvals and cc-fallback status.
+import { openSettings } from './settings.js';
+
 const token = new URLSearchParams(location.search).get('token');
 const $ = (id) => document.getElementById(id);
-const state = { cwd: '', sessionId: null, runId: null, source: null, live: null, tools: new Map(), status: null };
+const state = { cwd: '', sessionId: null, runId: null, source: null, live: null, working: null, tools: new Map(), status: null };
 
-async function api(path, opts = {}) {
+export async function api(path, opts = {}) {
   const res = await fetch(path, {
     ...opts,
     headers: { 'content-type': 'application/json', 'x-desk-token': token },
@@ -15,7 +17,7 @@ async function api(path, opts = {}) {
 }
 
 // ---- tiny, safe markdown ----
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 function inline(s) {
   return esc(s)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
@@ -24,11 +26,9 @@ function inline(s) {
 }
 function md(text) {
   const out = [];
-  const parts = String(text).split(/```/);
-  parts.forEach((part, i) => {
+  String(text).split(/```/).forEach((part, i) => {
     if (i % 2) {
-      const body = part.replace(/^[\w+-]*\n/, '');
-      out.push(`<pre><code>${esc(body.replace(/\n$/, ''))}</code></pre>`);
+      out.push(`<pre><code>${esc(part.replace(/^[\w+-]*\n/, '').replace(/\n$/, ''))}</code></pre>`);
       return;
     }
     for (const block of part.split(/\n{2,}/)) {
@@ -38,7 +38,7 @@ function md(text) {
         const tag = /^\s*\d+\./.test(lines[0]) ? 'ol' : 'ul';
         out.push(`<${tag}>${lines.map((l) => `<li>${inline(l.replace(/^\s*([-*]|\d+\.)\s/, ''))}</li>`).join('')}</${tag}>`);
       } else if (/^#{1,4}\s/.test(lines[0]) && lines.length === 1) {
-        out.push(`<p><b>${inline(lines[0].replace(/^#+\s/, ''))}</b></p>`);
+        out.push(`<h3>${inline(lines[0].replace(/^#+\s/, ''))}</h3>`);
       } else if (lines[0].startsWith('|')) {
         const rows = lines.filter((l) => !/^\|[\s:|-]+\|$/.test(l)).map((l) => l.replace(/^\||\|$/g, '').split('|'));
         out.push(`<pre>${esc(rows.map((r) => r.map((c) => c.trim()).join('  │  ')).join('\n'))}</pre>`);
@@ -53,10 +53,23 @@ function md(text) {
 // ---- chat rendering ----
 const chat = $('chat');
 const scroll = () => { chat.scrollTop = chat.scrollHeight; };
-function add(el) { $('empty')?.remove(); chat.appendChild(el); scroll(); return el; }
 function div(cls, html) { const d = document.createElement('div'); d.className = cls; if (html != null) d.innerHTML = html; return d; }
+function add(el) {
+  $('empty')?.remove();
+  // The "working" line always stays last while a run is going.
+  if (state.working && state.working.isConnected) chat.insertBefore(el, state.working); else chat.appendChild(el);
+  scroll();
+  return el;
+}
+function setWorking(on, label = 'Working…') {
+  if (on) {
+    if (!state.working) state.working = div('working', '<span class="spark">✳</span><span class="wl"></span>');
+    state.working.querySelector('.wl').textContent = label;
+    if (!state.working.isConnected) { chat.appendChild(state.working); scroll(); }
+  } else state.working?.remove();
+}
 
-function toolSummary(name, input = {}) {
+function toolSummary(input = {}) {
   const v = input.command || input.file_path || input.path || input.pattern || input.url || input.description || input.query
     || Object.values(input).find((x) => typeof x === 'string') || '';
   return String(v).split('\n')[0].slice(0, 200);
@@ -64,7 +77,11 @@ function toolSummary(name, input = {}) {
 
 function render(ev) {
   switch (ev.type) {
-    case 'user': add(div('msg user')).textContent = ev.text; break;
+    case 'user': {
+      const m = add(div('msg user', '<div class="bubble"></div>'));
+      m.firstChild.textContent = ev.text;
+      break;
+    }
     case 'text_delta':
       if (!state.live) state.live = add(div('msg assistant live'));
       state.live.dataset.raw = (state.live.dataset.raw || '') + ev.text;
@@ -77,41 +94,43 @@ function render(ev) {
     case 'tool_use': {
       finishLive();
       const d = document.createElement('details');
-      d.className = 'tool msg';
-      d.innerHTML = `<summary><span class="name">${esc(ev.name)}</span><span class="sum">${esc(toolSummary(ev.name, ev.input))}</span><span class="st wait">…</span></summary><pre class="in">${esc(JSON.stringify(ev.input, null, 2))}</pre>`;
+      d.className = `tool msg${state.runId ? ' running' : ''}`;
+      d.innerHTML = `<summary><span class="bullet"></span><span class="name">${esc(ev.name)}</span><span class="sum">${esc(toolSummary(ev.input))}</span><span class="chev">▶</span></summary>
+        <div class="body"><pre class="in"></pre></div>`;
+      d.querySelector('.in').textContent = JSON.stringify(ev.input, null, 2);
       state.tools.set(ev.id, d);
       add(d);
+      if (state.runId) setWorking(true, `Running ${ev.name}…`);
       break;
     }
     case 'tool_result': {
       const d = state.tools.get(ev.id);
       if (!d) break;
-      const st = d.querySelector('.st');
-      st.className = `st ${ev.isError ? 'err' : 'ok'}`;
-      st.textContent = ev.isError ? 'error' : 'done';
+      d.classList.remove('running');
+      d.classList.add(ev.isError ? 'err' : 'ok');
       const pre = document.createElement('pre');
-      pre.textContent = ev.text.length > 8000 ? ev.text.slice(0, 8000) + '\n…' : ev.text;
-      d.appendChild(pre);
+      pre.className = 'out';
+      pre.textContent = (ev.text.length > 8000 ? ev.text.slice(0, 8000) + '\n…' : ev.text) || '(no output)';
+      d.querySelector('.body').appendChild(pre);
+      if (state.runId) setWorking(true, 'Thinking…');
       break;
     }
     case 'permission': renderPermission(ev); break;
     case 'permission_answered': {
       const card = document.querySelector(`[data-perm="${ev.id}"]`);
-      if (card) { card.classList.add('answered'); card.querySelector('.btns').textContent = ev.decision === 'deny' ? 'Declined' : 'Allowed'; }
+      if (card) {
+        card.classList.add('answered');
+        card.querySelector('.btns').outerHTML = `<div class="answer">${ev.decision === 'deny' ? 'Declined' : ev.decision === 'always' ? 'Always allowed' : 'Allowed'}</div>`;
+      }
+      setWorking(true, 'Working…');
       break;
     }
-    case 'session':
-      state.sessionId = ev.sessionId;
-      break;
-    case 'init':
-      $('runState').textContent = `${ev.model} · ${ev.permissionMode}`;
-      break;
-    case 'result': {
+    case 'session': state.sessionId = ev.sessionId; break;
+    case 'init': $('runState').textContent = ev.model; break;
+    case 'result':
       finishLive();
-      const secs = ev.durationMs ? `${Math.round(ev.durationMs / 1000)} s` : '';
-      add(div(`msg meta`)).textContent = ev.ok ? `Done ${secs}` : `Stopped: ${ev.subtype} ${ev.text || ''}`;
+      if (!ev.ok) add(div('msg meta')).textContent = `Stopped (${ev.subtype})`;
       break;
-    }
     case 'error': finishLive(); add(div('msg error')).textContent = ev.message; break;
     case 'done': runEnded(); break;
     default: break;
@@ -121,13 +140,16 @@ function finishLive() { if (state.live) { state.live.classList.remove('live'); s
 
 function renderPermission(ev) {
   finishLive();
+  setWorking(true, 'Waiting for your approval…');
   const card = div('perm msg');
   card.dataset.perm = ev.id;
-  card.innerHTML = `<div class="q">Allow <code>${esc(ev.toolName)}</code>?</div>
-    ${ev.reason ? `<div class="hint">${esc(ev.reason)}</div>` : ''}
-    <pre>${esc(JSON.stringify(ev.input, null, 2))}</pre>
-    <div class="btns"><button class="primary" data-d="allow">Allow</button>
-    ${ev.canAlways ? '<button data-d="always">Always allow</button>' : ''}<button data-d="deny">Deny</button></div>`;
+  const target = toolSummary(ev.input);
+  card.innerHTML = `<div class="q">Allow Claude to use <code>${esc(ev.toolName)}</code>${target ? ` on <code>${esc(target.slice(0, 80))}</code>` : ''}?</div>
+    ${ev.reason ? `<div class="why">${esc(ev.reason)}</div>` : ''}
+    <pre></pre>
+    <div class="btns"><button class="btn primary" data-d="allow">Allow once</button>
+    ${ev.canAlways ? '<button class="btn" data-d="always">Always allow</button>' : ''}<button class="btn" data-d="deny">Deny</button></div>`;
+  card.querySelector('pre').textContent = JSON.stringify(ev.input, null, 2);
   card.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
     card.querySelectorAll('button').forEach((x) => { x.disabled = true; });
     api(`/api/runs/${state.runId}/permission`, { method: 'POST', body: { permId: ev.id, decision: b.dataset.d } }).catch((e) => alert(e.message));
@@ -140,12 +162,13 @@ function renderPermission(ev) {
 function setBusy(busy) {
   $('send').hidden = busy;
   $('stop').hidden = !busy;
-  $('prompt').disabled = false;
 }
 function runEnded() {
   state.source?.close();
   state.source = null;
   state.runId = null;
+  setWorking(false);
+  document.querySelectorAll('details.tool.running').forEach((d) => d.classList.remove('running'));
   setBusy(false);
   $('runState').textContent = '';
   loadSessions();
@@ -158,7 +181,7 @@ async function send(text) {
   render({ type: 'user', text });
   if (!state.sessionId) $('title').textContent = text.split('\n')[0].slice(0, 80);
   setBusy(true);
-  $('runState').textContent = 'Starting…';
+  setWorking(true, 'Thinking…');
   try {
     const { runId, viaProxy } = await api('/api/send', {
       method: 'POST',
@@ -170,18 +193,23 @@ async function send(text) {
     state.source.onmessage = (m) => render(JSON.parse(m.data));
     state.source.onerror = () => { if (state.runId === runId) runEnded(); };
   } catch (e) {
+    setWorking(false);
     render({ type: 'error', message: e.message });
     setBusy(false);
   }
 }
 
+const promptEl = $('prompt');
+const grow = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${promptEl.scrollHeight}px`; };
+promptEl.addEventListener('input', grow);
 $('composer').addEventListener('submit', (e) => {
   e.preventDefault();
-  const text = $('prompt').value;
-  $('prompt').value = '';
+  const text = promptEl.value;
+  promptEl.value = '';
+  grow();
   send(text);
 });
-$('prompt').addEventListener('keydown', (e) => {
+promptEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('composer').requestSubmit(); }
 });
 $('stop').addEventListener('click', () => state.runId && api(`/api/runs/${state.runId}/interrupt`, { method: 'POST' }));
@@ -200,6 +228,7 @@ async function loadSessions() {
     const li = document.createElement('li');
     li.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.at)}${s.branch ? ` · ${esc(s.branch)}` : ''}</div>`;
     li.title = s.title;
+    li.dataset.id = s.id;
     if (s.id === state.sessionId) li.classList.add('active');
     li.addEventListener('click', () => openSession(s));
     ul.appendChild(li);
@@ -216,21 +245,18 @@ async function openSession(s) {
   state.sessionId = s.id;
   clearChat(s.title);
   for (const it of await api(`/api/sessions/${s.id}/messages?dir=${encodeURIComponent(state.cwd)}`)) render(it);
-  document.querySelectorAll('#sessions li').forEach((li) => li.classList.toggle('active', li.title === s.title));
+  document.querySelectorAll('#sessions li').forEach((li) => li.classList.toggle('active', li.dataset.id === s.id));
 }
-$('newChat').addEventListener('click', () => {
-  if (state.runId) return;
-  newChat();
-  $('prompt').focus();
-});
 function newChat() {
   state.sessionId = null;
-  clearChat('New chat');
-  const hint = div('empty', `<p>New chat in <code>${esc(state.cwd)}</code>.</p><p class="hint">Older chats of this folder are on the left.</p>`);
+  clearChat('New session');
+  const hint = div('empty', `<span class="spark">✳</span><h2>What should we work on?</h2>
+    <p>in <code>${esc(state.cwd)}</code></p><p>Claude first, free models when the limit is reached.</p>`);
   hint.id = 'empty';
   chat.appendChild(hint);
   document.querySelectorAll('#sessions li.active').forEach((li) => li.classList.remove('active'));
 }
+$('newChat').addEventListener('click', () => { if (!state.runId) { newChat(); promptEl.focus(); } });
 
 function setFolder(dir) {
   state.cwd = dir;
@@ -249,23 +275,22 @@ function fillModels(status) {
   const sel = $('model');
   const keep = sel.value;
   const free = (status?.providers || []).filter((p) => p.configured && p.type === 'openai' && p.model !== 'auto');
-  sel.innerHTML = `<optgroup label="Claude"><option value="">Default</option><option>claude-opus-5-5</option><option>claude-sonnet-5-5</option><option>claude-haiku-5-5</option></optgroup>`
-    + (free.length ? `<optgroup label="Free via cc-fallback">${free.map((p) => `<option value="${esc(`${p.name},${p.model}`)}">${esc(p.name)} · ${esc(p.model)}</option>`).join('')}</optgroup>` : '');
+  sel.innerHTML = `<optgroup label="Claude"><option value="">Default model</option><option value="claude-opus-5-5">Opus 5.5</option><option value="claude-sonnet-5-5">Sonnet 5.5</option><option value="claude-haiku-5-5">Haiku 5.5</option></optgroup>`
+    + (free.length ? `<optgroup label="Directly, via cc-fallback">${free.map((p) => `<option value="${esc(`${p.name},${p.model}`)}">${esc(p.name)} · ${esc(p.model)}</option>`).join('')}</optgroup>` : '');
   if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
 }
-async function refreshStatus() {
+export async function refreshStatus() {
   const s = await api('/api/fallback').catch(() => ({ up: false }));
   state.status = s;
   const dot = $('dot');
   if (!s.up) {
     dot.className = 'dot bad';
-    $('statusText').textContent = 'cc-fallback is off: no fallback (click to start)';
+    $('statusText').textContent = 'cc-fallback off · click to start';
   } else {
     const claude = s.providers.find((p) => p.name === 'claude');
-    const paused = s.providers.filter((p) => p.pausedFor);
     dot.className = `dot ${claude?.pausedFor ? 'warn' : 'ok'}`;
-    $('statusText').textContent = `cc-fallback: ${s.forced ? `forced → ${s.forced}` : 'auto'} · last answer: ${s.lastUsed || '–'}`
-      + (claude?.pausedFor ? ` · Claude limit, back in ${claude.pausedFor}` : paused.length ? ` · ${paused.length} paused` : '');
+    $('statusText').textContent = claude?.pausedFor ? `Claude limit · back in ${claude.pausedFor} · using ${s.lastUsed || 'free models'}`
+      : `cc-fallback ${s.forced ? `→ ${s.forced}` : 'on'} · last: ${s.lastUsed || '–'}`;
   }
   fillModels(s);
   if (!$('statusPanel').hidden) renderStatusPanel();
@@ -274,14 +299,14 @@ function renderStatusPanel() {
   const s = state.status;
   const panel = $('statusPanel');
   if (!s?.up) {
-    panel.innerHTML = '<p>The proxy is not running.</p><div class="row-actions"><button id="startProxy" class="primary">Start cc-fallback</button></div>';
+    panel.innerHTML = '<p>The cc-fallback proxy is not running.</p><div class="row-actions"><button id="startProxy" class="btn primary">Start cc-fallback</button></div>';
     $('startProxy').onclick = async () => { panel.innerHTML = 'Starting…'; await api('/api/fallback/start', { method: 'POST' }).catch(() => {}); refreshStatus(); };
     return;
   }
-  const rows = s.providers.filter((p) => p.configured).map((p) => `<tr><td><b>${esc(p.name)}</b></td><td>${esc(p.model)}</td>
-    <td>${p.pausedFor ? `paused ${esc(p.pausedFor)}` : 'ready'}</td><td>${p.ok || p.failed ? `ok ${p.ok} / failed ${p.failed}` : ''}</td>
-    <td><button data-use="${esc(p.name)}">Use</button></td></tr>`).join('');
-  panel.innerHTML = `<table>${rows}</table><div class="row-actions"><button data-use="auto" class="primary">Automatic</button><button id="resetCd">Retry Claude now</button></div>`;
+  const rows = s.providers.filter((p) => p.configured).map((p) => `<tr><td><b>${esc(p.name)}</b></td><td title="${esc(p.model)}">${esc(p.model)}</td>
+    <td>${p.pausedFor ? `paused ${esc(p.pausedFor)}` : 'ready'}</td><td>${p.ok || p.failed ? `${p.ok} ok / ${p.failed} failed` : ''}</td>
+    <td><button class="btn small" data-use="${esc(p.name)}">${s.forced === p.name ? 'Forced' : 'Use'}</button></td></tr>`).join('');
+  panel.innerHTML = `<table>${rows}</table><div class="row-actions"><button data-use="auto" class="btn primary">Automatic</button><button id="resetCd" class="btn">Retry Claude now</button></div>`;
   panel.querySelectorAll('[data-use]').forEach((b) => b.addEventListener('click', async () => {
     await api('/api/fallback/use', { method: 'POST', body: { provider: b.dataset.use } }).catch((e) => alert(e.message));
     refreshStatus();
@@ -293,9 +318,8 @@ $('statusBtn').addEventListener('click', () => {
   panel.hidden = !panel.hidden;
   if (!panel.hidden) renderStatusPanel();
 });
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('footer')) $('statusPanel').hidden = true;
-});
+document.addEventListener('click', (e) => { if (!e.target.closest('#status')) $('statusPanel').hidden = true; });
+$('settingsBtn').addEventListener('click', () => openSettings());
 
 // ---- start ----
 (async () => {
@@ -303,5 +327,5 @@ document.addEventListener('click', (e) => {
   setFolder(info.defaultDir);
   refreshStatus();
   setInterval(refreshStatus, 5000);
-  $('prompt').focus();
+  promptEl.focus();
 })();

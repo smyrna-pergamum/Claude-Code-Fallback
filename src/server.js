@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { listSessions, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { RunManager } from './runs.js';
 import { proxyBase, isUp, ensureProxy, proxyStatus, proxyCommand } from './fallback.js';
+import { getProviders, saveProviders, testProvider } from './settings.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const STATE_PATH = join(homedir(), '.cc-desk', 'state.json');
@@ -100,6 +101,13 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
     if (req.method === 'POST' && (r = m(/^\/api\/runs\/([\w-]+)\/interrupt$/))) {
       return json(res, 200, { ok: await runs.interrupt(r[1]) });
     }
+    if (req.method === 'GET' && p === '/api/providers') {
+      try { return json(res, 200, await getProviders()); } catch (e) { return json(res, 500, { error: e.message }); }
+    }
+    if (req.method === 'POST' && p === '/api/providers') {
+      try { return json(res, 200, await saveProviders((await body(req)).providers || [])); } catch (e) { return json(res, 400, { error: e.message }); }
+    }
+    if (req.method === 'POST' && p === '/api/providers/test') return json(res, 200, await testProvider(await body(req)));
     if (req.method === 'GET' && p === '/api/fallback') return json(res, 200, await proxyStatus());
     if (req.method === 'POST' && p === '/api/fallback/start') { proxyUp = await ensureProxy(); return json(res, 200, { up: proxyUp }); }
     if (req.method === 'POST' && (r = m(/^\/api\/fallback\/(use|reset)$/))) {
