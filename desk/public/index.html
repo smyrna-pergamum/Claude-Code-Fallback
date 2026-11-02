@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CC Desk</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand"><span class="spark" aria-hidden="true">✳</span> CC Desk</div>
+    <button id="newChat" class="nav-btn"><span class="ico">＋</span> New session</button>
+    <button id="folderBtn" class="nav-btn folder-btn" title="Change folder">
+      <span class="ico">▤</span><span id="folderName" class="folder-name">…</span>
+    </button>
+    <div class="label">Recents</div>
+    <ul id="sessions"></ul>
+    <div id="status">
+      <button id="settingsBtn" class="nav-btn"><span class="ico">⚙</span> Models &amp; API keys</button>
+      <button id="statusBtn" class="status-btn"><span id="dot" class="dot"></span><span id="statusText">cc-fallback…</span></button>
+      <div id="statusPanel" hidden></div>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <h1 id="title">New session</h1>
+      <span id="runState"></span>
+    </header>
+    <section id="chat" aria-live="polite"></section>
+    <form id="composer">
+      <div class="box">
+        <textarea id="prompt" rows="1" placeholder="Ask Claude Code to do something…"></textarea>
+        <div class="controls">
+          <select id="mode" class="pill" title="Permission mode">
+            <option value="default">Ask before edits</option>
+            <option value="acceptEdits">Auto-accept edits</option>
+            <option value="plan">Plan mode</option>
+            <option value="auto">Auto mode</option>
+            <option value="bypassPermissions">Bypass permissions</option>
+          </select>
+          <span class="spacer"></span>
+          <select id="model" class="pill" title="Model"></select>
+          <button type="button" id="stop" class="round stop" title="Stop" hidden>■</button>
+          <button type="submit" id="send" class="round send" title="Send (Enter)">↑</button>
+        </div>
+      </div>
+      <div class="foot-hint">Enter to send · Shift+Enter for a new line</div>
+    </form>
+  </main>
+  <div id="settings" class="overlay" hidden></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
