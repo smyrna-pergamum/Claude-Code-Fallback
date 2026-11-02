@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { loadConfig, writeDefaultConfig, isConfigured, CONFIG_PATH, LOG_PATH } from '../src/config.js';
+import { loadConfig, writeDefaultConfig, isConfigured, resolveUrl, CONFIG_PATH, LOG_PATH } from '../src/config.js';
 import { createProxy } from '../src/server.js';
 import { detectHardware, recommend, pickInstalled } from '../src/hardware.js';
 
@@ -11,7 +11,7 @@ Usage:
   cc-fallback start                  run the proxy in the foreground
   cc-fallback scan                   check hardware, local models, API keys; recommend a model
   cc-fallback status                 show providers and cooldowns of the running proxy
-  cc-fallback use <provider|auto>    force a provider (e.g. ollama) or return to automatic
+  cc-fallback use <target|auto>      force a provider or "provider,model" (e.g. gemini,gemini-2.5-pro); auto = automatic
   cc-fallback reset                  clear all cooldowns (retry Claude now)
   cc-fallback init                   write a config file you can edit
   cc-fallback env                    print how to point Claude Code at the proxy manually
@@ -37,8 +37,12 @@ function printStatus(s) {
   console.log(`Mode: ${s.forced ? `forced -> ${s.forced}` : 'auto'}   last used: ${s.lastUsed || '-'}   requests: ${s.requests}`);
   for (const p of s.providers) {
     const st = !p.configured ? 'not configured' : p.pausedFor ? `paused ${p.pausedFor} (${p.reason})` : 'ready';
-    console.log(`  ${p.name.padEnd(11)} ${p.model.padEnd(28)} ${st}`);
+    const used = p.ok || p.failed ? `  ok ${p.ok ?? 0} / failed ${p.failed ?? 0}` : '';
+    console.log(`  ${p.name.padEnd(11)} ${p.model.padEnd(40)} ${st}${used}`);
+    for (const k of p.keys || []) if (k.pausedFor) console.log(`  ${''.padEnd(11)} key ${k.slot} paused ${k.pausedFor} (${k.reason})`);
   }
+  const routes = Object.entries(s.routes || {}).filter(([, v]) => Array.isArray(v) && v.length);
+  if (routes.length) console.log(`Routes: ${routes.map(([k, v]) => `${k} -> ${v.join(' | ')}`).join('   ')}`);
 }
 
 async function isRunning() {
@@ -87,6 +91,8 @@ async function scan() {
       const ids = await localModels(p);
       info = ids === null ? 'not running' : ids.length ? `running, will use: ${pickInstalled(ids)} (installed: ${ids.length})` : 'running, no models installed';
     } else if (p.type === 'anthropic' && !p.apiKey) info = 'your Claude Code login (pass-through)';
+    else if (p.keyless) info = `no key needed, model ${p.model}`;
+    else if (!resolveUrl(p)) info = `not set: ${p.baseUrl.match(/\{env:(\w+)\}/)[1]}`;
     else info = isConfigured(p) ? `key found, model ${p.model}` : `no key: set ${String(p.apiKey).replace('env:', '')}`;
     console.log(`  ${p.name.padEnd(11)} ${info}`);
   }
@@ -114,7 +120,7 @@ switch (cmd) {
     printStatus(await admin('/_fallback/status'));
     break;
   case 'use':
-    if (!args[0]) { console.error('Usage: cc-fallback use <provider|auto>'); process.exit(1); }
+    if (!args[0]) { console.error('Usage: cc-fallback use <provider|provider,model|auto>'); process.exit(1); }
     printStatus(await admin('/_fallback/use', { provider: args[0] }));
     break;
   case 'reset':

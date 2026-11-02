@@ -2,7 +2,7 @@
 
 Claude kullanım limitiniz dolduğunda **Claude Code** ile çalışmaya devam edin.
 
-`cc-fallback`, küçük bir yerel proxy (bağımlılık yok, Node 18+) ve bir Claude Code eklentisidir. Claude Code proxy ile konuşur; proxy istekleri normal şekilde Claude'a gönderir. Claude limit hatası verdiğinde listenizdeki bir sonraki sağlayıcıya otomatik geçer: ücretsiz bulut API'leri (Gemini, Cerebras, Mistral, OpenRouter, Groq) ya da kendi bilgisayarınızda çalışan açık kaynak modeller (Ollama, LM Studio). Limit sıfırlanınca kendiliğinden Claude'a döner.
+`cc-fallback`, küçük bir yerel proxy (bağımlılık yok, Node 18+) ve bir Claude Code eklentisidir. Claude Code proxy ile konuşur; proxy istekleri normal şekilde Claude'a gönderir. Claude limit hatası verdiğinde listenizdeki bir sonraki sağlayıcıya otomatik geçer: ücretsiz bulut API'leri (Gemini, Z AI, NVIDIA, Cerebras, Mistral, Groq, OpenRouter, Cloudflare ve anahtarsız Kilo, LLM7) ya da kendi bilgisayarınızda çalışan açık kaynak modeller (Ollama, LM Studio). Limit sıfırlanınca kendiliğinden Claude'a döner.
 
 [English README](README.md)
 
@@ -46,10 +46,17 @@ cc-fallback run      # proxy'yi başlatır ve Claude Code'u onun üzerinden aça
 | Sağlayıcı | Değişken | Varsayılan model |
 |---|---|---|
 | Google Gemini | `GEMINI_API_KEY` | gemini-2.5-flash |
+| Z AI (GLM) | `ZAI_API_KEY` | glm-4.7-flash |
+| NVIDIA NIM | `NVIDIA_API_KEY` | nvidia/nemotron-3-ultra-550b-a55b |
 | Cerebras | `CEREBRAS_API_KEY` | gpt-oss-120b |
-| Mistral | `MISTRAL_API_KEY` | devstral-medium-latest |
-| OpenRouter | `OPENROUTER_API_KEY` | qwen/qwen3-coder:free |
+| Mistral | `MISTRAL_API_KEY` | mistral-medium-latest |
 | Groq | `GROQ_API_KEY` | openai/gpt-oss-120b |
+| OpenRouter | `OPENROUTER_API_KEY` | nvidia/nemotron-3-ultra-550b-a55b:free |
+| Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | @cf/openai/gpt-oss-120b |
+| Kilo Code | gerekmez | kilo-auto/free |
+| LLM7.io | gerekmez (isteğe bağlı `LLM7_API_KEY`) | DeepSeek-V4-Flash-0731 |
+
+Kilo ve LLM7 anahtarsız çalışır, yani yedek hiç ayar yapmadan devreye girer; ortak ücretsiz havuzlardır, daha yavaştır ve istemleri kaydedebilirler. Liste [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis) temel alınarak hazırlandı.
 
 Windows (PowerShell, kalıcı):
 
@@ -69,7 +76,17 @@ Claude Code geniş bağlam ister: Ollama'yı `OLLAMA_CONTEXT_LENGTH=32768` (veya
 
 ## Ayarlar
 
-`cc-fallback init` → `~/.cc-fallback/config.json`. Sağlayıcı sırası = geçiş sırası. Alanların açıklaması [README.md](README.md#configuration) içinde.
+`cc-fallback init` ile `~/.cc-fallback/config.json` oluşturulur. Sağlayıcı sırası, yedeğe geçiş sırasıdır. Alanların tam listesi İngilizce README'de.
+
+Yeni özellikler ([claude-code-router](https://github.com/musistudio/claude-code-router) ve [free-claude-code](https://github.com/alishahryar1/free-claude-code) fikirlerinden, sıfırdan yazıldı):
+
+- **Anahtar havuzu:** `"apiKey": ["env:GEMINI_API_KEY", "env:GEMINI_API_KEY_2"]`. Limite takılan anahtar beklemeye alınır, sıradaki kullanılır.
+- **Seviyeye göre model:** `"models": { "opus": "…", "sonnet": "…", "haiku": "…" }`.
+- **Bağlam sınırı:** `contextWindow`'dan büyük istekler o sağlayıcıyı atlar.
+- **Eşzamanlılık:** `maxConcurrent` dolunca paralel istek bir sonraki sağlayıcıya gider (Z AI için 1).
+- **Yönlendirme (`routes`):** Claude yine önce denenir; ardından istek türüne göre tercih edilen sağlayıcı gelir. `image` (resim varsa), `longContext` (`longContextThreshold` üstü), `think` (genişletilmiş düşünme). `background` (haiku istekleri) ise **Claude'dan önce** denenir ve Claude kotasını korur; bu istekler arasında güvenlik kontrolleri de olduğu için varsayılan olarak kapalı.
+- **Modeli kendin seç:** Claude Code içinde `/model gemini,gemini-2.5-pro`; alt ajan isteminin başına `<CCF-MODEL>sağlayıcı,model</CCF-MODEL>`; terminalden `cc-fallback use nvidia,openai/gpt-oss-20b`.
+- `cc-fallback status` sağlayıcı başına başarılı/başarısız sayısını ve bekleyen anahtarları gösterir.
 
 ## Gizlilik
 

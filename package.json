@@ -1,6 +1,6 @@
 {
   "name": "cc-fallback",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Keep Claude Code working when your Claude limit is reached: automatic fallback to free AI APIs and local open-source models.",
   "type": "module",
   "bin": {

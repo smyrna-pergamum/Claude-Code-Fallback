@@ -5,6 +5,7 @@ import { toOpenAIRequest, fromOpenAIResponse } from '../src/translate.js';
 import { StreamTranslator } from '../src/stream.js';
 import { createProxy } from '../src/server.js';
 import { recommend, pickInstalled } from '../src/hardware.js';
+import { isConfigured, resolveUrl } from '../src/config.js';
 
 const listen = (server) => new Promise((r) => server.listen(0, '127.0.0.1', () => r(server.address().port)));
 
@@ -114,4 +115,14 @@ test('falls back on 429, keeps Claude token away from other providers, then skip
   assert.doesNotMatch(second, /cc-fallback: free/, 'switch is announced only once');
   const st = await fetch(`http://127.0.0.1:${proxyPort}/_fallback/status`).then((r) => r.json());
   assert.equal(st.providers[0].pausedFor, '2 min');
+});
+
+test('keyless providers and {env:} placeholders in baseUrl', () => {
+  assert.equal(isConfigured({ type: 'openai', keyless: true, baseUrl: 'https://x/v1' }), true);
+  const cf = { type: 'openai', baseUrl: 'https://x/accounts/{env:CCF_TEST_ACCOUNT}/ai/v1/', apiKey: 'k' };
+  delete process.env.CCF_TEST_ACCOUNT;
+  assert.equal(isConfigured(cf), false);
+  process.env.CCF_TEST_ACCOUNT = 'abc';
+  assert.equal(resolveUrl(cf), 'https://x/accounts/abc/ai/v1');
+  assert.equal(isConfigured(cf), true);
 });

@@ -25,6 +25,9 @@ export function cleanSchema(schema, strict) {
   return out;
 }
 
+// Claude Code's billing/attribution line is meant for Anthropic only.
+const isBillingHeader = (text) => /^\s*x-anthropic-billing-header/.test(text || '');
+
 const textOf = (content) => {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
@@ -93,7 +96,8 @@ function convertToolChoice(tc) {
 export function toOpenAIRequest(body, provider, model) {
   const strict = provider.strictSchema ?? /generativelanguage\.googleapis/.test(provider.baseUrl || '');
   const messages = [];
-  const system = typeof body.system === 'string' ? body.system : textOf(body.system);
+  const system = typeof body.system === 'string' ? body.system
+    : textOf((body.system || []).filter((b) => !isBillingHeader(b.text)));
   if (system) messages.push({ role: 'system', content: system });
   messages.push(...convertMessages(body.messages || []));
 
@@ -104,6 +108,7 @@ export function toOpenAIRequest(body, provider, model) {
   if (body.top_p != null) req.top_p = body.top_p;
   if (body.stop_sequences?.length) req.stop = body.stop_sequences;
   if (req.stream && provider.streamUsage !== false) req.stream_options = { include_usage: true };
+  if (provider.reasoningEffort && ['enabled', 'adaptive'].includes(body.thinking?.type)) req.reasoning_effort = provider.reasoningEffort;
 
   // Only client tools (with input_schema); server tools like web_search have no OpenAI equivalent.
   const tools = (body.tools || []).filter((t) => t.input_schema).map((t) => ({
@@ -115,7 +120,35 @@ export function toOpenAIRequest(body, provider, model) {
     const tc = convertToolChoice(body.tool_choice);
     if (tc && tc !== 'auto') req.tool_choice = tc;
   }
-  return req;
+  return { ...req, ...provider.extraBody };
+}
+
+const MODEL_TAG = /<CCF-MODEL>\s*([^<]+?)\s*<\/CCF-MODEL>\s*/;
+
+/**
+ * Finds a target the client chose: a "provider,model" model name (set with /model) or a
+ * <CCF-MODEL>provider,model</CCF-MODEL> tag in the system prompt or the first two user messages
+ * (e.g. in a subagent definition). The tag is removed from the body. Returns the target or null.
+ */
+export function takeModelTarget(body) {
+  if (typeof body.model === 'string' && body.model.includes(',')) return body.model;
+  let found = null;
+  const strip = (text) => text.replace(MODEL_TAG, (_, t) => { found ??= t; return ''; });
+  if (typeof body.system === 'string') body.system = strip(body.system);
+  else for (const b of body.system || []) if (b.type === 'text') b.text = strip(b.text);
+  for (const m of (body.messages || []).filter((x) => x.role === 'user').slice(0, 2)) {
+    if (typeof m.content === 'string') m.content = strip(m.content);
+    else for (const b of m.content || []) if (b.type === 'text') b.text = strip(b.text);
+  }
+  return found;
+}
+
+/** True if the latest user turn carries an image, directly or inside a tool result. */
+export function hasImage(body) {
+  const last = [...(body.messages || [])].reverse().find((m) => m.role === 'user');
+  const blocks = Array.isArray(last?.content) ? last.content : [];
+  return blocks.some((b) => b.type === 'image'
+    || (b.type === 'tool_result' && Array.isArray(b.content) && b.content.some((c) => c.type === 'image')));
 }
 
 export function mapStopReason(finish, hasTools) {
