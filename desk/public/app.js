@@ -7,8 +7,10 @@ const $ = (id) => document.getElementById(id);
 const state = {
   cwd: '', sessionId: null, runId: null, source: null, live: null, working: null, tools: new Map(), status: null,
   engine: 'claude', env: 'local', envs: [], parts: new Map(), ocModels: null,
+  link: null, // a Claude Code chat's two legs during a handover: { claude, opencode, active }
+  runEngine: null, // the agent answering the current run (OpenCode during a handover)
 };
-const agentName = () => (state.engine === 'opencode' ? 'OpenCode' : 'Claude');
+const agentName = () => ((state.runEngine || state.engine) === 'opencode' ? 'OpenCode' : 'Claude');
 
 export async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -148,7 +150,10 @@ function render(ev) {
       setWorking(true, 'Working…');
       break;
     }
-    case 'session': state.sessionId = ev.sessionId; break;
+    case 'session':
+      state.sessionId = ev.sessionId;
+      if (state.link && state.runEngine) state.link[state.runEngine] = ev.sessionId;
+      break;
     case 'init': $('runState').textContent = ev.model; break;
     case 'result':
       finishLive();
@@ -214,16 +219,24 @@ async function send(text) {
   setBusy(true);
   setWorking(true, 'Thinking…');
   try {
-    const { runId, viaProxy } = await api('/api/send', {
+    const { runId, viaProxy, engine, link, handover } = await api('/api/send', {
       method: 'POST',
       body: {
         prompt: full, cwd: state.cwd, sessionId: state.sessionId, model: $('model').value, effort: $('effort').value || undefined,
-        permissionMode: $('mode').value, engine: state.engine, environment: state.env,
+        permissionMode: $('mode').value, engine: state.engine, environment: state.env, link: state.link || undefined,
       },
     });
     pendingFiles = [];
     renderAttachments();
-    if (!viaProxy && state.engine === 'claude') add(div('msg meta')).textContent = 'cc-fallback is not running: this message goes straight to Claude, without fallback.';
+    state.runEngine = engine;
+    if (state.engine === 'claude') state.link = link;
+    if (handover?.to === 'opencode') {
+      add(div('msg meta handover')).textContent = `⚡ Claude is at its usage limit${handover.backIn ? ` (back in ${handover.backIn})` : ''}. `
+        + `Continuing with OpenCode · ${handover.model.replace(/^opencode\//, '')}, which got a summary of this chat. Claude Code takes over again when the limit resets.`;
+    } else if (handover?.to === 'claude') {
+      add(div('msg meta handover')).textContent = '✓ Claude is available again. Continuing in Claude Code, which got a summary of what OpenCode did.';
+    }
+    if (!viaProxy && engine === 'claude') add(div('msg meta')).textContent = 'cc-fallback is not running: this message goes straight to Claude, without fallback.';
     state.runId = runId;
     state.source = new EventSource(`/api/runs/${runId}/events?token=${token}`);
     state.source.onmessage = (m) => render(JSON.parse(m.data));
@@ -302,6 +315,8 @@ function clearChat(title) {
 async function openSession(s) {
   if (state.runId) return;
   state.sessionId = s.id;
+  state.link = null;
+  state.runEngine = null;
   setEngine(s.engine === 'opencode' ? 'opencode' : 'claude');
   clearChat(s.title);
   for (const it of await api(`/api/sessions/${s.id}/messages?dir=${encodeURIComponent(state.cwd)}`)) render(it);
@@ -309,6 +324,8 @@ async function openSession(s) {
 }
 function newChat() {
   state.sessionId = null;
+  state.link = null;
+  state.runEngine = null;
   clearChat('New session');
   const hint = div('empty', `<span class="spark">✳</span><h2>What should we work on?</h2>
     <p>in <code>${esc(state.cwd)}</code></p><p>${state.engine === 'opencode'
@@ -508,3 +525,12 @@ $('envPick').addEventListener('change', (e) => chooseEnvironment(e.target.value)
 $('envEdit').addEventListener('click', () => chooseEnvironment('__edit'));
 loadEnvironments();
 setEngine('claude');
+
+// ---- handover to OpenCode at the Claude limit ----
+(async () => {
+  const h = await api('/api/handover').catch(() => null);
+  const box = $('handoverOn');
+  if (!h || !h.available) { box.closest('.env-row').hidden = true; return; }
+  box.checked = h.enabled;
+  box.addEventListener('change', () => api('/api/handover', { method: 'POST', body: { enabled: box.checked } }).catch((e) => alert(e.message)));
+})();

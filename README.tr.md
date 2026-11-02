@@ -172,6 +172,7 @@ Yerel açık kaynak modeller uzun görevlerde Claude'dan belirgin şekilde zayı
 - Açık ve koyu temada Claude Code görünümü: mesaj baloncukları, çıktısıyla birlikte açılan araç satırları, onay kartları (Allow once / Always allow / Deny), izin modları
 - Klasöre göre oturumların, Claude masaüstü uygulamasında ya da terminalde başlattıkların dahil: birini açıp devam et
 - **İki ajan**: Claude Code (proxy üzerinden) ya da uygulamayla gelen **OpenCode**; OpenCode'un ücretsiz modelleri (Big Pickle, GLM-5.3-Flash Free, DeepSeek V4.1 Flash Free…) anahtar istemez, Claude limitine takılmaz; OpenCode da düzenleme ve komutlardan önce sorar
+- **Claude limitinde devir**: Claude limitteyken Claude Code sohbeti, ücretsiz bir modelle OpenCode'da sürer (sohbetin özetini alır); limit açılınca özetle birlikte Claude Code'a döner. Zen'in ücretsiz modelleri yalnızca OpenCode içinde çalıştığı için Claude'un yerini böyle tutarlar. Varsayılan olarak açık; ⚙ Env panelinden kapatılabilir
 - **Ortamlar** (Claude Code'daki gibi): mesaj kutusunun yanından seçilen, isimli ortam değişkeni setleri (API anahtarları, PATH eklemeleri, araç ayarları); gizli değerler kaydedildikten sonra gösterilmez
 - Model seçici: Claude modelleri, herhangi bir ücretsiz sağlayıcının modeli ya da OpenCode modelleri
 - Durum çubuğu: hangi sağlayıcının cevap verdiği, Claude limitinin ne zaman açılacağı, sağlayıcı zorlama, Claude'u hemen yeniden deneme

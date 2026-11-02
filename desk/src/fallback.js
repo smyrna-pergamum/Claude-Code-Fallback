@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 
 export function proxyBase() {
+  if (process.env.CC_FALLBACK_URL) return process.env.CC_FALLBACK_URL.replace(/\/$/, ''); // e.g. a test proxy
   let cfg = {};
   try { cfg = JSON.parse(readFileSync(join(homedir(), '.cc-fallback', 'config.json'), 'utf8')); } catch { /* defaults */ }
   return `http://${cfg.host || '127.0.0.1'}:${cfg.port || 3456}`;

@@ -15,6 +15,7 @@ import { getProviders, saveProviders, testProvider } from './settings.js';
 import { authStatus, startLogin } from './auth.js';
 import { OpenCode } from './opencode.js';
 import { environmentsForUi, environmentVars, saveEnvironments } from './environments.js';
+import { claudeLimit, transcript, handoverPrompt, HANDOVER_MODEL } from './handover.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const STATE_PATH = join(homedir(), '.cc-desk', 'state.json');
@@ -125,13 +126,45 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
       proxyUp = await isUp() || await ensureProxy();
       state.recentDirs = [cwd, ...state.recentDirs.filter((d) => d !== cwd)].slice(0, 10);
       saveState(state).catch(() => {});
-      const engine = b.engine === 'opencode' ? 'opencode' : 'claude';
+      let engine = b.engine === 'opencode' ? 'opencode' : 'claude';
+      // A Claude Code chat may have an OpenCode leg (handover); `link` holds both sessions.
+      const link = { claude: null, opencode: null, active: engine, ...(b.link || {}) };
+      if (engine === 'claude' && !b.link) link.claude = b.sessionId || null;
+      let prompt = b.prompt, model = b.model, handover = null;
+      if (engine === 'claude' && state.handover !== false && opencode.available && proxyUp) {
+        const lim = claudeLimit(await proxyStatus());
+        const ocModel = state.handoverModel || HANDOVER_MODEL;
+        if (lim.limited) {
+          if (link.active !== 'opencode') {
+            const items = link.claude ? historyItems(await getSessionMessages(link.claude, { dir: cwd }).catch(() => [])) : [];
+            prompt = handoverPrompt({ to: 'opencode', cwd, history: transcript(items), prompt });
+            handover = { to: 'opencode', backIn: lim.backIn, model: ocModel };
+          }
+          engine = 'opencode';
+          model = ocModel;
+        } else if (link.active === 'opencode') {
+          const items = link.opencode ? await opencode.history(link.opencode, cwd).catch(() => []) : [];
+          prompt = handoverPrompt({ to: 'claude', cwd, history: transcript(items), prompt });
+          handover = { to: 'claude' };
+        }
+      }
+      link.active = engine;
       const envId = b.environment || 'local';
       const run = runs.start({
-        prompt: b.prompt, cwd, sessionId: b.sessionId, model: b.model, permissionMode: b.permissionMode,
+        prompt, cwd, sessionId: link[engine], model, permissionMode: b.permissionMode,
         engine, envId, vars: await environmentVars(envId),
       });
-      return json(res, 200, { runId: run.id, viaProxy: proxyUp });
+      return json(res, 200, { runId: run.id, viaProxy: proxyUp, engine, link, handover });
+    }
+    if (req.method === 'GET' && p === '/api/handover') {
+      return json(res, 200, { enabled: state.handover !== false, model: state.handoverModel || HANDOVER_MODEL, available: opencode.available });
+    }
+    if (req.method === 'POST' && p === '/api/handover') {
+      const b = await body(req);
+      if (typeof b.enabled === 'boolean') state.handover = b.enabled;
+      if (typeof b.model === 'string' && /^[\w.-]+\/[\w.:/-]+$/.test(b.model)) state.handoverModel = b.model;
+      await saveState(state);
+      return json(res, 200, { enabled: state.handover !== false, model: state.handoverModel || HANDOVER_MODEL });
     }
     if (req.method === 'GET' && (r = m(/^\/api\/runs\/([\w-]+)\/events$/))) {
       if (!runs.attach(r[1], res)) json(res, 404, { error: 'unknown run' });

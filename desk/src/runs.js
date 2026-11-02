@@ -102,6 +102,8 @@ export class RunManager {
         includePartialMessages: true,
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         env: { ...childEnv(this.baseUrl()), ...vars },
+        // Also as flag settings: an `env` in the user's ~/.claude/settings.json would otherwise win.
+        settings: { env: { ANTHROPIC_BASE_URL: this.baseUrl(), CLAUDE_CODE_ATTRIBUTION_HEADER: '0', ...vars } },
         abortController: run.abort,
         canUseTool,
         stderr: (d) => { if (/error/i.test(d)) emit({ type: 'log', text: d.slice(0, 500) }); },

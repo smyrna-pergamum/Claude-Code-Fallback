@@ -172,6 +172,7 @@ Local open-source models are much weaker than Claude at long agentic tasks. They
 - Claude Code look in light and dark: chat bubbles, compact tool rows with their output, approval cards (Allow once / Always allow / Deny), permission modes
 - Your sessions per folder, including those started in the Claude desktop app or a terminal: open one and continue
 - **Two agents**: Claude Code (through the proxy) or **OpenCode**, bundled, with its free models (Big Pickle, GLM-5.3-Flash Free, DeepSeek V4.1 Flash Free, …) that need no key and no Claude limit; OpenCode asks before edits and commands, like Claude Code
+- **Handover at the Claude limit**: while Claude is at its usage limit, a Claude Code chat continues in OpenCode with a free model (it gets a summary of the chat) and goes back to Claude Code with a summary once the limit resets. Zen's free models work only inside OpenCode, so this is how they cover for Claude. On by default; switch it off in the ⚙ Env panel
 - **Environments**, like Claude Code's: named sets of environment variables (API keys, PATH additions, tool settings) picked next to the message box; secret values are hidden after saving
 - Model picker: Claude models, any free provider's model directly, or OpenCode's models
 - Status bar: which provider answered, Claude's limit countdown, force a provider, retry Claude now

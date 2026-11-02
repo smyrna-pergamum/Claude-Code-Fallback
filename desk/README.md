@@ -12,6 +12,7 @@ The Claude desktop app gives its sessions its own API address, so it can't use c
 - Approval cards (Allow once / Always allow / Deny) and permission modes (ask before edits, auto-accept edits, plan, auto, bypass)
 - Sessions per folder, **including those from the Claude desktop app and the terminal**: open any of them and continue
 - **Agent picker**: Claude Code, or **OpenCode** (bundled) with its free models; a chat belongs to one agent, and OpenCode chats are listed with an OpenCode tag
+- **Handover at the Claude limit** (on by default, toggle in ⚙ Env): when cc-fallback reports Claude paused for its limit, the next message of a Claude Code chat goes to OpenCode with a free model and a summary of the chat; once the limit resets, the chat returns to Claude Code with a summary of the OpenCode part
 - **Environments**: named sets of environment variables (stored in `~/.cc-desk/environments.json`), chosen next to the message box or in the ⚙ Env panel; both agents get them, secret values are masked in the UI
 - Model picker: Claude models, or a free provider's model directly (`provider,model`); OpenCode's models when OpenCode is the agent
 - Status bar: which provider answered, Claude's limit countdown, force a provider, retry Claude now; starts the proxy if it isn't running
