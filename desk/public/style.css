@@ -205,16 +205,6 @@ details.tool.err .body .out { color: var(--bad); }
 .brand .logo { width: 22px; height: 22px; border-radius: 6px; }
 
 /* ---- environment drawer ---- */
-#envPanel { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; background: var(--side); border-left: 1px solid var(--border); z-index: 15; display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,.08); }
-#envPanel[hidden] { display: none; }
-.env-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
-.icon-btn { border: 0; background: none; border-radius: 6px; padding: 4px 8px; color: var(--muted); }
-.icon-btn:hover { background: var(--hover); }
-.env-body { padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-.env-row { display: flex; align-items: center; gap: 10px; }
-.env-label { font-size: 12px; color: var(--muted); width: 88px; flex: none; }
-.env-val { font-family: var(--mono); font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
-.env-h3 { font-size: 12px; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
 .env-vars { list-style: none; margin: 0; padding: 0; }
 .env-vars li { font-family: var(--mono); font-size: 11.5px; padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
 .env-vars .k { color: var(--accent); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -234,9 +224,55 @@ details.tool.err .body .out { color: var(--bad); }
 .env-form .vars-head { font-size: 11.5px; color: var(--faint); }
 .env-form .vn { font-family: var(--mono); }
 .env-form .vars { display: flex; flex-direction: column; gap: 6px; }
-.env-row .btn.small { margin-left: 6px; }
 .agent-pill { font-weight: 600; color: var(--text); }
 .tag.oc { background: color-mix(in srgb, #4a7fd0 18%, transparent); color: #4a7fd0; }
 .msg.meta.handover { color: var(--accent); font-size: 12.5px; border-left: 3px solid var(--accent); padding: 2px 10px; }
-.env-check { align-items: flex-start; font-size: 12.5px; color: var(--text); cursor: pointer; }
-.env-check input { margin-top: 3px; accent-color: var(--accent); }
+
+/* ---- right panel, laid out like Claude Code's ---- */
+#envPanel { width: 290px; flex: none; background: var(--side); border-left: 1px solid var(--border); overflow-y: auto; padding: 6px 0 14px; }
+.rp-sec { padding: 12px 18px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.rp-sec:last-child { border-bottom: 0; }
+.rp-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+details.rp-sec > summary { cursor: pointer; list-style: none; }
+details.rp-sec > summary::-webkit-details-marker { display: none; }
+details.rp-sec > summary::after { content: " ›"; color: var(--faint); }
+details.rp-sec[open] > summary::after { content: " ⌄"; }
+.rp-item { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 4px 0; min-width: 0; }
+.rp-item svg { color: var(--muted); flex: none; }
+.rp-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.rp-text .muted { font-size: 12px; }
+.rp-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-height: 26px; }
+.rp-label { color: var(--muted); width: 82px; flex: none; }
+.rp-select { flex: 1; min-width: 0; padding-left: 4px; color: var(--text); }
+.link-btn { border: 0; background: none; color: var(--text); text-decoration: underline; font-size: 12.5px; padding: 0 2px; }
+.rp-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12.5px; color: var(--text); cursor: pointer; margin-top: 4px; }
+.rp-check input { margin-top: 2px; accent-color: var(--accent); }
+.rp-sub { font-size: 11.5px; color: var(--faint); margin-top: 6px; }
+.ctx-line { display: flex; justify-content: space-between; font-size: 13px; }
+.ctx-line .muted { font-size: 12px; }
+.ctx-bar { height: 5px; border-radius: 5px; background: var(--border); overflow: hidden; }
+.ctx-bar span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 5px; transition: width .3s; }
+.ctx-bar.warn span { background: var(--warn); }
+.ctx-bar.full span { background: var(--bad); }
+.panel-btn { margin-left: 4px; }
+header .panel-btn.on { color: var(--accent); }
+@media (max-width: 1100px) { #envPanel.auto-hide { display: none; } }
+
+/* ---- + menu ---- */
+.plus-wrap { position: relative; }
+.plus-menu { position: absolute; bottom: 40px; left: 0; z-index: 10; min-width: 250px; background: var(--raised); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 5px; }
+.plus-menu > button { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: none; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; text-align: left; }
+.plus-menu > button:hover { background: var(--hover); }
+.plus-menu svg { color: var(--muted); flex: none; }
+.plus-menu kbd { margin-left: auto; font: 11.5px var(--mono); color: var(--faint); }
+.plus-menu .chev-r { margin-left: auto; color: var(--faint); }
+.slash-list { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; max-height: 240px; overflow-y: auto; }
+.slash-list button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 6px 10px; border-radius: 6px; font: 12.5px var(--mono); }
+.slash-list button:hover { background: var(--hover); }
+.chip.dir { background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
+.attachments { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 3px 4px 3px 9px; font-size: 12.5px; max-width: 260px; }
+.chip .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip button { border: 0; background: none; color: var(--muted); border-radius: 5px; width: 20px; height: 20px; }
+.chip button:hover { background: var(--hover); color: var(--text); }
+.round.attach { background: var(--hover); color: var(--text); font-size: 18px; font-weight: 400; }

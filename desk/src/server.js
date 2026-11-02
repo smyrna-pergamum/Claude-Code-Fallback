@@ -21,6 +21,8 @@ const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const STATE_PATH = join(homedir(), '.cc-desk', 'state.json');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 const DIRECT = 'https://api.anthropic.com';
+// Attached files are saved here; chats that use them may read this folder without asking.
+const UPLOADS = join(tmpdir(), 'cc-desk-uploads');
 
 const SECRET_RE = /key|token|secret|password|passwd|credential|auth/i;
 const ENV_VARS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'GROQ_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'CC_FALLBACK_BIN', 'PORT'];
@@ -51,6 +53,7 @@ const textOf = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.filter((
 /** Session transcript -> the same item shapes the live stream produces. */
 export function historyItems(messages) {
   const items = [];
+  let used = 0;
   for (const m of messages) {
     if (m.parent_tool_use_id) continue;
     const content = m.message?.content;
@@ -61,12 +64,15 @@ export function historyItems(messages) {
       const text = stripTags(textOf(content));
       if (text && !text.startsWith('<command-') && !text.startsWith('<local-command')) items.push({ type: 'user', text });
     } else if (m.type === 'assistant') {
+      const u = m.message?.usage;
+      if (u) used = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0) || used;
       for (const b of Array.isArray(content) ? content : []) {
         if (b.type === 'text' && b.text) items.push({ type: 'text', text: b.text });
         else if (b.type === 'tool_use') items.push({ type: 'tool_use', id: b.id, name: b.name, input: b.input });
       }
     }
   }
+  if (used) items.push({ type: 'context', used });
   return items;
 }
 
@@ -150,9 +156,12 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
       }
       link.active = engine;
       const envId = b.environment || 'local';
+      const dirs = (Array.isArray(b.dirs) ? b.dirs : []).map((d) => resolve(String(d)))
+        .filter((d) => d !== cwd && existsSync(d) && statSync(d).isDirectory());
+      if (prompt.includes(UPLOADS) && existsSync(UPLOADS)) dirs.push(UPLOADS);
       const run = runs.start({
         prompt, cwd, sessionId: link[engine], model, permissionMode: b.permissionMode,
-        engine, envId, vars: await environmentVars(envId),
+        engine, envId, vars: await environmentVars(envId), dirs,
       });
       return json(res, 200, { runId: run.id, viaProxy: proxyUp, engine, link, handover });
     }
@@ -193,42 +202,19 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
     }
     if (req.method === 'GET' && p === '/api/env') return json(res, 200, envInfo());
     if (req.method === 'POST' && p === '/api/upload') {
-      // multipart/form-data single file
-      const ct = req.headers['content-type'] || '';
-      const m = ct.match(/boundary=(.+)$/);
-      if (!m) return json(res, 400, { error: 'no boundary' });
-      const boundary = m[1].replace(/^"|"$/g, '');
+      // The body is the file itself; its name comes in x-file-name (URI-encoded).
+      const name = decodeURIComponent(String(req.headers['x-file-name'] || 'file')).split(/[\\/]/).pop() || 'file';
       const chunks = [];
-      for await (const c of req) chunks.push(c);
-      const buf = Buffer.concat(chunks);
-      const delim = Buffer.from('--' + boundary);
-      // find file part
-      let idx = 0;
-      while (true) {
-        const start = buf.indexOf(delim, idx);
-        if (start < 0) break;
-        const next = buf.indexOf(delim, start + delim.length);
-        const part = buf.slice(start, next < 0 ? buf.length : next);
-        const headerEnd = part.indexOf('\r\n\r\n');
-        if (headerEnd > 0) {
-          const headers = part.slice(0, headerEnd).toString('utf8');
-          const fnm = headers.match(/filename="([^"]*)"/);
-          if (fnm) {
-            const name = fnm[1] || 'file';
-            const data = part.slice(headerEnd + 4);
-            // strip trailing CRLF
-            const clean = data.endsWith(Buffer.from('\r\n')) ? data.slice(0, -2) : data;
-            const dir = join(tmpdir(), 'cc-desk-uploads');
-            await mkdir(dir, { recursive: true });
-            const path = join(dir, `${randomUUID()}-${name.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
-            await writeFile(path, clean);
-            return json(res, 200, { path, name });
-          }
-        }
-        idx = start + delim.length;
-        if (next < 0) break;
+      let size = 0;
+      for await (const c of req) {
+        size += c.length;
+        if (size > 100 * 1024 * 1024) return json(res, 413, { error: 'File is larger than 100 MB.' });
+        chunks.push(c);
       }
-      return json(res, 400, { error: 'no file' });
+      await mkdir(UPLOADS, { recursive: true });
+      const path = join(UPLOADS, `${randomUUID().slice(0, 8)}-${name.replace(/[^\w.() -]/g, '_')}`);
+      await writeFile(path, Buffer.concat(chunks));
+      return json(res, 200, { path, name, size });
     }
     json(res, 404, { error: 'not found' });
   }

@@ -36,6 +36,7 @@ const PERMISSION = JSON.stringify({ edit: 'ask', bash: 'ask', webfetch: 'ask' })
 export class OpenCode {
   constructor() {
     this.servers = new Map(); // environment id -> { proc, base, auth, ready }
+    this.limits = new Map(); // "provider/model" -> context window (tokens)
     process.on('exit', () => this.stopAll());
   }
 
@@ -100,7 +101,10 @@ export class OpenCode {
     const p = await this.call(srv, 'GET', '/provider', dir);
     const out = [];
     for (const prov of p.all.filter((x) => p.connected.includes(x.id))) {
-      for (const [id, m] of Object.entries(prov.models)) out.push({ id: `${prov.id}/${id}`, name: `${prov.name || prov.id} · ${m.name || id}`, free: /free|big-pickle/.test(id) });
+      for (const [id, m] of Object.entries(prov.models)) {
+        if (m.limit?.context) this.limits.set(`${prov.id}/${id}`, m.limit.context);
+        out.push({ id: `${prov.id}/${id}`, name: `${prov.name || prov.id} · ${m.name || id}`, free: /free|big-pickle/.test(id) });
+      }
     }
     return out.sort((a, b) => (b.free - a.free) || a.id.localeCompare(b.id));
   }
@@ -109,7 +113,9 @@ export class OpenCode {
   async history(sessionId, dir) {
     const srv = await this.server();
     const items = [];
+    let used = 0;
     for (const { info, parts } of await this.call(srv, 'GET', `/session/${sessionId}/message`, dir)) {
+      if (info.role === 'assistant' && info.tokens) used = (info.tokens.input || 0) + (info.tokens.cache?.read || 0) + (info.tokens.cache?.write || 0) || used;
       for (const part of parts) {
         if (part.type === 'text' && part.text && !part.synthetic) items.push({ type: info.role === 'user' ? 'user' : 'text', text: part.text });
         else if (part.type === 'tool') {
@@ -119,6 +125,7 @@ export class OpenCode {
         }
       }
     }
+    if (used) items.push({ type: 'context', used });
     return items;
   }
 
@@ -126,7 +133,7 @@ export class OpenCode {
    * Runs one prompt. `run` is the RunManager's run (emit, pending); resolves when the session is idle.
    * Permission mode: bypass answers every request, acceptEdits answers edits; plan uses the plan agent.
    */
-  async prompt(run, { prompt, cwd, sessionId, model, permissionMode, envId, vars }) {
+  async prompt(run, { prompt, cwd, sessionId, model, permissionMode, envId, vars, dirs = [] }) {
     const srv = await this.server(envId, vars);
     const dir = cwd;
     let sid = sessionId;
@@ -136,6 +143,7 @@ export class OpenCode {
     run.sessionId = sid;
     run.emit({ type: 'session', sessionId: sid });
     const [providerID, ...rest] = String(model || DEFAULT_MODEL).split('/');
+    if (!this.limits.size) await this.models(dir).catch(() => {}); // context window sizes for the meter
     run.emit({ type: 'init', model: `OpenCode · ${providerID}/${rest.join('/')}` });
 
     const ac = new AbortController();
@@ -148,7 +156,9 @@ export class OpenCode {
 
     await this.call(srv, 'POST', `/session/${sid}/prompt_async`, dir, {
       model: { providerID, modelID: rest.join('/') }, agent: permissionMode === 'plan' ? 'plan' : undefined,
-      parts: [{ type: 'text', text: prompt }],
+      parts: [{ type: 'text', text: dirs.length ? `${prompt}
+
+(Also part of this chat: ${dirs.join(', ')})` : prompt }],
     });
 
     const decoder = new TextDecoder();
@@ -171,7 +181,11 @@ export class OpenCode {
             run.emit({ type: 'part_delta', id: p.partID, text: p.delta });
           } else if (e.type === 'message.part.updated') {
             const part = p.part;
-            if (part.type === 'text' && roles.get(part.messageID) === 'assistant' && !part.synthetic) {
+            if (part.type === 'step-finish' && part.tokens) {
+              const t = part.tokens;
+              const used = (t.input || 0) + (t.cache?.read || 0) + (t.cache?.write || 0);
+              if (used) run.emit({ type: 'context', used, max: this.limits.get(`${providerID}/${rest.join('/')}`) || 0 });
+            } else if (part.type === 'text' && roles.get(part.messageID) === 'assistant' && !part.synthetic) {
               run.emit({ type: 'part_text', id: part.id, text: part.text || '', done: !!part.time?.end });
             } else if (part.type === 'tool') {
               const st = part.state || {};
@@ -186,7 +200,10 @@ export class OpenCode {
               }
             }
           } else if (e.type === 'permission.asked') {
-            const auto = permissionMode === 'bypassPermissions' || (permissionMode === 'acceptEdits' && p.permission === 'edit');
+            // Folders the user added to the chat (and attachments) count as part of it.
+            const inAdded = (pat) => dirs.some((d) => String(pat).replace(/[\\/]\*+$/, '').toLowerCase().startsWith(d.toLowerCase()));
+            const auto = permissionMode === 'bypassPermissions' || (permissionMode === 'acceptEdits' && p.permission === 'edit')
+              || (p.permission === 'external_directory' && p.patterns?.length && p.patterns.every(inAdded));
             if (auto) { await reply(p.id, 'allow'); continue; }
             run.pending.set(p.id, { answer: (d) => reply(p.id, d) });
             run.emit({ type: 'permission', id: p.id, toolName: p.permission, input: { patterns: p.patterns, ...p.metadata }, canAlways: true });

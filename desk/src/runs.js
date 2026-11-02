@@ -37,7 +37,7 @@ export function toEvents(msg) {
       if (b.type === 'tool_result') out.push({ type: 'tool_result', id: b.tool_use_id, text: textOf(b.content), isError: !!b.is_error });
     }
   } else if (msg.type === 'system' && msg.subtype === 'init') {
-    out.push({ type: 'init', model: msg.model, cwd: msg.cwd, permissionMode: msg.permissionMode });
+    out.push({ type: 'init', model: msg.model, cwd: msg.cwd, permissionMode: msg.permissionMode, slashCommands: msg.slash_commands || [] });
   } else if (msg.type === 'result') {
     out.push({
       type: 'result', ok: msg.subtype === 'success' && !msg.is_error, subtype: msg.subtype,
@@ -55,7 +55,7 @@ export class RunManager {
   }
 
   /** engine: 'claude' (default) or 'opencode'; vars: the chosen environment's variables. */
-  start({ prompt, cwd, sessionId, model, permissionMode, engine = 'claude', envId = 'local', vars = {} }) {
+  start({ prompt, cwd, sessionId, model, permissionMode, engine = 'claude', envId = 'local', vars = {}, dirs = [] }) {
     const run = {
       id: randomUUID(), sessionId: sessionId || null, cwd, engine, events: [], clients: new Set(),
       pending: new Map(), done: false, q: null, abort: new AbortController(), stop: null,
@@ -76,7 +76,7 @@ export class RunManager {
     };
 
     if (engine === 'opencode') {
-      this.opencode.prompt(run, { prompt, cwd, sessionId, model, permissionMode, envId, vars })
+      this.opencode.prompt(run, { prompt, cwd, sessionId, model, permissionMode, envId, vars, dirs })
         .catch((e) => emit({ type: 'error', message: e.message }))
         .finally(finish);
       return run;
@@ -96,7 +96,7 @@ export class RunManager {
     run.q = query({
       prompt,
       options: {
-        cwd, model: model || undefined, resume: sessionId || undefined,
+        cwd, model: model || undefined, resume: sessionId || undefined, additionalDirectories: dirs.length ? dirs : undefined,
         permissionMode: permissionMode || 'default',
         allowDangerouslySkipPermissions: permissionMode === 'bypassPermissions',
         includePartialMessages: true,
@@ -115,6 +115,13 @@ export class RunManager {
         for await (const msg of run.q) {
           if (!run.sessionId && msg.session_id) { run.sessionId = msg.session_id; emit({ type: 'session', sessionId: msg.session_id }); }
           for (const ev of toEvents(msg)) emit(ev);
+          if (msg.type === 'result') {
+            // Context window use, the numbers Claude Code's own context meter shows.
+            try {
+              const u = await run.q.getContextUsage({ detail: 'summary' });
+              emit({ type: 'context', used: u.totalTokens, max: u.maxTokens });
+            } catch { /* older CLI or session already closed */ }
+          }
         }
       } catch (e) {
         emit({ type: 'error', message: e.message });

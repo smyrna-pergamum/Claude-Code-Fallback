@@ -154,7 +154,11 @@ function render(ev) {
       state.sessionId = ev.sessionId;
       if (state.link && state.runEngine) state.link[state.runEngine] = ev.sessionId;
       break;
-    case 'init': $('runState').textContent = ev.model; break;
+    case 'init':
+      $('runState').textContent = ev.model;
+      if (ev.slashCommands?.length) { try { localStorage.setItem('ccdesk.slash', JSON.stringify(ev.slashCommands)); } catch { /* storage off */ } }
+      break;
+    case 'context': showContext(ev); break;
     case 'result':
       finishLive();
       if (!ev.ok) add(div('msg meta')).textContent = `Stopped (${ev.subtype})`;
@@ -223,7 +227,7 @@ async function send(text) {
       method: 'POST',
       body: {
         prompt: full, cwd: state.cwd, sessionId: state.sessionId, model: $('model').value, effort: $('effort').value || undefined,
-        permissionMode: $('mode').value, engine: state.engine, environment: state.env, link: state.link || undefined,
+        permissionMode: $('mode').value, engine: state.engine, environment: state.env, link: state.link || undefined, dirs: state.extraDirs || [],
       },
     });
     pendingFiles = [];
@@ -252,21 +256,63 @@ const promptEl = $('prompt');
 const attachmentsEl = $('attachments');
 let pendingFiles = [];
 function renderAttachments() {
-  if (!pendingFiles.length) { attachmentsEl.hidden = true; attachmentsEl.innerHTML = ''; return; }
+  const dirs = state.extraDirs || [];
+  if (!pendingFiles.length && !dirs.length) { attachmentsEl.hidden = true; attachmentsEl.innerHTML = ''; renderExtraDirs(); return; }
   attachmentsEl.hidden = false;
-  attachmentsEl.innerHTML = pendingFiles.map((f, i) => `<span class="chip">${esc(f.name)} <button type="button" data-i="${i}" title="Remove">×</button></span>`).join('');
-  attachmentsEl.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { pendingFiles.splice(Number(b.dataset.i), 1); renderAttachments(); }));
+  attachmentsEl.innerHTML = pendingFiles.map((f, i) => `<span class="chip" title="${esc(f.path)}">📎 <span class="nm">${esc(f.name)}</span><button type="button" data-i="${i}" title="Remove">×</button></span>`).join('')
+    + dirs.map((d, i) => `<span class="chip dir" title="${esc(d)}">📁 <span class="nm">${esc(d.split(/[\\/]/).filter(Boolean).pop() || d)}</span><button type="button" data-d="${i}" title="Remove folder">×</button></span>`).join('');
+  attachmentsEl.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => { pendingFiles.splice(Number(b.dataset.i), 1); renderAttachments(); }));
+  attachmentsEl.querySelectorAll('[data-d]').forEach((b) => b.addEventListener('click', () => { state.extraDirs.splice(Number(b.dataset.d), 1); renderAttachments(); }));
+  renderExtraDirs();
+}
+function renderExtraDirs() {
+  $('envExtraDirs').innerHTML = (state.extraDirs || []).map((d) => `<div class="rp-item" title="${esc(d)}"><svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 6a1.5 1.5 0 0 1 1.5-1.5h3.5l2 2H16a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 16 16H4a1.5 1.5 0 0 1-1.5-1.5z"/></svg><span class="rp-text">${esc(d.split(/[\\/]/).filter(Boolean).pop() || d)} <span class="muted">${esc(d)}</span></span></div>`).join('');
 }
 async function uploadFile(file) {
-  const fd = new FormData();
-  fd.append('file', file, file.name);
-  const res = await fetch('/api/upload', { method: 'POST', headers: { 'x-desk-token': token }, body: fd });
+  const res = await fetch('/api/upload', {
+    method: 'POST', headers: { 'x-desk-token': token, 'x-file-name': encodeURIComponent(file.name) }, body: file,
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   pendingFiles.push({ name: file.name, path: data.path });
   renderAttachments();
 }
-$('attach').addEventListener('click', () => $('fileInput').click());
+// The + menu, like Claude Code's: files or photos (Ctrl+U), another folder, slash commands.
+const plusMenu = $('plusMenu');
+const DEFAULT_SLASH = ['compact', 'clear', 'context', 'cost', 'init', 'review', 'security-review', 'pr-comments', 'release-notes'];
+function slashCommands() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem('ccdesk.slash') || '[]'); } catch { /* storage off */ }
+  return (saved.length ? saved : DEFAULT_SLASH).filter((c) => !/^(exit|quit|statusline|terminal-setup|vim|ide)$/.test(c));
+}
+function closePlus() { plusMenu.hidden = true; $('slashList').hidden = true; }
+$('attach').addEventListener('click', (e) => { e.stopPropagation(); plusMenu.hidden = !plusMenu.hidden; $('slashList').hidden = true; });
+document.addEventListener('click', (e) => { if (!e.target.closest('.plus-wrap')) closePlus(); });
+plusMenu.addEventListener('click', async (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.act === 'files') { closePlus(); $('fileInput').click(); }
+  else if (b.dataset.act === 'folder') {
+    closePlus();
+    const dir = window.desk?.pickFolder ? await window.desk.pickFolder(state.cwd) : prompt('Folder to add (Claude can read and edit it too):', state.cwd);
+    if (dir && dir !== state.cwd && !(state.extraDirs ||= []).includes(dir)) { state.extraDirs.push(dir); renderAttachments(); }
+  } else if (b.dataset.act === 'slash') {
+    const list = $('slashList');
+    list.innerHTML = slashCommands().map((c) => `<button type="button" data-cmd="${esc(c)}">/${esc(c)}</button>`).join('');
+    list.hidden = !list.hidden;
+  } else if (b.dataset.cmd) {
+    closePlus();
+    promptEl.value = `/${b.dataset.cmd} ${promptEl.value}`.trimEnd() + ' ';
+    grow();
+    promptEl.focus();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'u' && el_settingsClosed()) { e.preventDefault(); $('fileInput').click(); }
+  if (e.key === 'Escape') closePlus();
+});
+function el_settingsClosed() { return $('settings').hidden; }
 $('fileInput').addEventListener('change', async (e) => {
   for (const f of e.target.files) { try { await uploadFile(f); } catch (err) { alert(err.message); } }
   e.target.value = '';
@@ -311,6 +357,7 @@ function clearChat(title) {
   state.parts.clear();
   state.live = null;
   $('title').textContent = title;
+  showContext({ used: 0 });
 }
 async function openSession(s) {
   if (state.runId) return;
@@ -326,6 +373,8 @@ function newChat() {
   state.sessionId = null;
   state.link = null;
   state.runEngine = null;
+  state.extraDirs = [];
+  renderAttachments();
   clearChat('New session');
   const hint = div('empty', `<span class="spark">✳</span><h2>What should we work on?</h2>
     <p>in <code>${esc(state.cwd)}</code></p><p>${state.engine === 'opencode'
@@ -343,6 +392,7 @@ function setFolder(dir) {
   $('folderBtn').title = dir;
   newChat();
   loadSessions();
+  if (!envPanel.hidden) syncEnv();
 }
 $('folderBtn').addEventListener('click', async () => {
   const dir = window.desk?.pickFolder ? await window.desk.pickFolder(state.cwd) : prompt('Folder path:', state.cwd);
@@ -449,25 +499,49 @@ if (demo) {
   promptEl.focus();
 })();
 
-// ---- environment drawer ----
+// ---- right panel (like Claude Code's): environment, context, session ----
 const envPanel = $('envPanel');
 async function syncEnv() {
-  $('envCwd').textContent = state.cwd || '—';
+  const parts = (state.cwd || '').split(/[\\/]/).filter(Boolean);
+  $('envFolderName').textContent = parts.pop() || '—';
+  $('envCwd').textContent = parts.length ? `· ${parts.join('\\')}` : '';
+  $('envFolderName').closest('.rp-item').title = state.cwd || '';
   const em = $('envModel');
   em.innerHTML = $('model').innerHTML;
   em.value = $('model').value;
   $('envMode').value = $('mode').value;
-  $('envProxy').textContent = state.status?.up ? (state.status.lastUsed || 'on') : 'off';
+  $('envProxy').textContent = state.status?.up ? `on · last: ${state.status.lastUsed || '–'}` : 'off';
+  renderExtraDirs();
   const env = await api('/api/env').catch(() => ({ vars: [] }));
   $('envVars').innerHTML = env.vars.map((v) => `<li><span class="k">${esc(v.name)}</span><span class="v">${esc(v.value)}</span></li>`).join('') || '<li><span class="v">none</span></li>';
 }
-$('envBtn').addEventListener('click', () => { envPanel.hidden = !envPanel.hidden; if (!envPanel.hidden) syncEnv(); });
-envPanel.querySelector('[data-close]').addEventListener('click', () => { envPanel.hidden = true; });
+function setPanel(open) {
+  envPanel.hidden = !open;
+  $('envBtn').classList.toggle('on', open);
+  try { localStorage.setItem('ccdesk.panel', open ? '1' : '0'); } catch { /* storage off */ }
+  if (open) syncEnv();
+}
+$('envBtn').addEventListener('click', () => setPanel(envPanel.hidden));
 $('envModel').addEventListener('change', (e) => { $('model').value = e.target.value; });
 $('envMode').addEventListener('change', (e) => { $('mode').value = e.target.value; });
 $('model').addEventListener('change', () => { $('envModel').value = $('model').value; });
 $('mode').addEventListener('change', () => { $('envMode').value = $('mode').value; });
-setInterval(() => { if (!envPanel.hidden) { $('envProxy').textContent = state.status?.up ? (state.status.lastUsed || 'on') : 'off'; } }, 5000);
+setInterval(() => { if (!envPanel.hidden) syncEnv(); }, 5000);
+(() => { let open = true; try { open = localStorage.getItem('ccdesk.panel') !== '0'; } catch { /* storage off */ } setPanel(open); })();
+
+// Context window use, as Claude Code shows it: "72% used · 722.1k / 1M".
+const fmtTok = (n) => (n >= 1e6 ? `${+(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
+function showContext(ev) {
+  const key = state.sessionId ? `ccdesk.ctx.${state.sessionId}` : null;
+  let max = ev.max;
+  if (!max && key) { try { max = JSON.parse(localStorage.getItem(key) || '{}').max; } catch { /* storage off */ } }
+  if (key && ev.used) { try { localStorage.setItem(key, JSON.stringify({ used: ev.used, max })); } catch { /* storage off */ } }
+  const pct = max ? Math.min(100, Math.round((ev.used / max) * 100)) : null;
+  $('ctxPct').textContent = ev.used ? (pct != null ? `${pct}% used` : 'Used') : 'No messages yet';
+  $('ctxTok').textContent = ev.used ? `${fmtTok(ev.used)}${max ? ` / ${fmtTok(max)}` : ''}` : '';
+  $('ctxFill').style.width = `${pct ?? 0}%`;
+  $('ctxFill').parentElement.className = `ctx-bar${pct >= 90 ? ' full' : pct >= 70 ? ' warn' : ''}`;
+}
 
 // ---- agent: Claude Code or OpenCode ----
 async function loadOpenCodeModels() {
