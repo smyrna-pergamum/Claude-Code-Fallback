@@ -1,7 +1,7 @@
 {
   "name": "cc-desk",
   "productName": "CC Desk",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Desktop app for Claude Code that runs through the cc-fallback proxy",
   "author": "smyrna-pergamum",
   "homepage": "https://github.com/smyrna-pergamum/Claude-Code-Fallback",
