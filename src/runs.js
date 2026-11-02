@@ -1,0 +1,142 @@
+// One "run" = one prompt sent to Claude Code through the Agent SDK, streamed to the UI as events.
+import { randomUUID } from 'node:crypto';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+
+// Variables a host (e.g. the Claude desktop app) sets for its own child sessions; they must not
+// leak into ours, or Claude Code would act as that host's child and skip our proxy.
+const HOST_ENV = /^(CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_AGENT_SDK_.*|ANTHROPIC_BASE_URL|CLAUDE_PID)$/;
+
+export function childEnv(baseUrl) {
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) if (!HOST_ENV.test(k)) env[k] = v;
+  env.ANTHROPIC_BASE_URL = baseUrl;
+  // The attribution line is for Anthropic only; it should not reach free providers.
+  env.CLAUDE_CODE_ATTRIBUTION_HEADER = '0';
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'cc-desk/0.1.0';
+  return env;
+}
+
+const textOf = (content) => (typeof content === 'string' ? content
+  : Array.isArray(content) ? content.filter((b) => b.type === 'text').map((b) => b.text).join('\n') : '');
+
+/** Turns one SDK message into zero or more UI events. */
+export function toEvents(msg) {
+  const out = [];
+  if (msg.parent_tool_use_id) return out; // subagent internals: shown only as the Agent tool card
+  if (msg.type === 'stream_event') {
+    const e = msg.event;
+    if (e.type === 'content_block_delta' && e.delta?.type === 'text_delta') out.push({ type: 'text_delta', text: e.delta.text });
+  } else if (msg.type === 'assistant') {
+    for (const b of msg.message?.content || []) {
+      if (b.type === 'text') out.push({ type: 'text', text: b.text });
+      else if (b.type === 'tool_use') out.push({ type: 'tool_use', id: b.id, name: b.name, input: b.input });
+    }
+    if (msg.error) out.push({ type: 'error', message: String(msg.error) });
+  } else if (msg.type === 'user') {
+    for (const b of Array.isArray(msg.message?.content) ? msg.message.content : []) {
+      if (b.type === 'tool_result') out.push({ type: 'tool_result', id: b.tool_use_id, text: textOf(b.content), isError: !!b.is_error });
+    }
+  } else if (msg.type === 'system' && msg.subtype === 'init') {
+    out.push({ type: 'init', model: msg.model, cwd: msg.cwd, permissionMode: msg.permissionMode });
+  } else if (msg.type === 'result') {
+    out.push({
+      type: 'result', ok: msg.subtype === 'success' && !msg.is_error, subtype: msg.subtype,
+      costUsd: msg.total_cost_usd, durationMs: msg.duration_ms, text: msg.result,
+    });
+  }
+  return out;
+}
+
+export class RunManager {
+  constructor({ baseUrl }) {
+    this.baseUrl = baseUrl; // () => current ANTHROPIC_BASE_URL
+    this.runs = new Map();
+  }
+
+  start({ prompt, cwd, sessionId, model, permissionMode }) {
+    const run = {
+      id: randomUUID(), sessionId: sessionId || null, cwd, events: [], clients: new Set(),
+      pending: new Map(), done: false, q: null, abort: new AbortController(),
+    };
+    this.runs.set(run.id, run);
+    const emit = (ev) => {
+      run.events.push(ev);
+      const line = `data: ${JSON.stringify(ev)}\n\n`;
+      for (const c of run.clients) c.write(line);
+    };
+    run.emit = emit;
+
+    const canUseTool = (toolName, input, { signal, suggestions, decisionReason }) => new Promise((resolve) => {
+      const permId = randomUUID();
+      run.pending.set(permId, { resolve, suggestions, input });
+      signal?.addEventListener('abort', () => {
+        if (run.pending.delete(permId)) resolve({ behavior: 'deny', message: 'Cancelled' });
+      });
+      emit({ type: 'permission', id: permId, toolName, input, reason: decisionReason || null, canAlways: !!suggestions?.length });
+    });
+
+    run.q = query({
+      prompt,
+      options: {
+        cwd, model: model || undefined, resume: sessionId || undefined,
+        permissionMode: permissionMode || 'default',
+        allowDangerouslySkipPermissions: permissionMode === 'bypassPermissions',
+        includePartialMessages: true,
+        systemPrompt: { type: 'preset', preset: 'claude_code' },
+        env: childEnv(this.baseUrl()),
+        abortController: run.abort,
+        canUseTool,
+        stderr: (d) => { if (/error/i.test(d)) emit({ type: 'log', text: d.slice(0, 500) }); },
+      },
+    });
+
+    (async () => {
+      try {
+        for await (const msg of run.q) {
+          if (!run.sessionId && msg.session_id) { run.sessionId = msg.session_id; emit({ type: 'session', sessionId: msg.session_id }); }
+          for (const ev of toEvents(msg)) emit(ev);
+        }
+      } catch (e) {
+        emit({ type: 'error', message: e.message });
+      } finally {
+        run.done = true;
+        emit({ type: 'done' });
+        for (const c of run.clients) c.end();
+        run.clients.clear();
+        setTimeout(() => this.runs.delete(run.id), 10 * 60_000).unref();
+      }
+    })();
+    return run;
+  }
+
+  /** Attaches an SSE response; replays what was already emitted. */
+  attach(runId, res) {
+    const run = this.runs.get(runId);
+    if (!run) return false;
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+    for (const ev of run.events) res.write(`data: ${JSON.stringify(ev)}\n\n`);
+    if (run.done) { res.end(); return true; }
+    run.clients.add(res);
+    res.on('close', () => run.clients.delete(res));
+    return true;
+  }
+
+  answer(runId, permId, decision) {
+    const run = this.runs.get(runId);
+    const p = run?.pending.get(permId);
+    if (!p) return false;
+    run.pending.delete(permId);
+    if (decision === 'deny') p.resolve({ behavior: 'deny', message: 'The user declined this action.' });
+    else p.resolve({ behavior: 'allow', updatedInput: p.input, ...(decision === 'always' && p.suggestions?.length ? { updatedPermissions: p.suggestions } : {}) });
+    run.emit({ type: 'permission_answered', id: permId, decision });
+    return true;
+  }
+
+  async interrupt(runId) {
+    const run = this.runs.get(runId);
+    if (!run || run.done) return false;
+    for (const [id, p] of run.pending) { p.resolve({ behavior: 'deny', message: 'Interrupted', interrupt: true }); run.pending.delete(id); }
+    try { await run.q.interrupt(); } catch { run.abort.abort(); }
+    return true;
+  }
+}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CC Desk</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="brand">CC Desk</div>
+    <button id="newChat" class="primary">+ New chat</button>
+    <div class="folder">
+      <div class="label">Folder</div>
+      <button id="folderBtn" class="folder-btn" title="Change folder"><span id="folderName">…</span></button>
+    </div>
+    <div class="label">Sessions</div>
+    <ul id="sessions"></ul>
+  </aside>
+
+  <main>
+    <header>
+      <h1 id="title">New chat</h1>
+      <span id="runState"></span>
+    </header>
+    <section id="chat" aria-live="polite">
+      <div id="empty" class="empty">
+        <p>Claude Code, through <b>cc-fallback</b>: when your Claude limit is reached, free models take over.</p>
+        <p class="hint">Pick a folder on the left, then ask anything.</p>
+      </div>
+    </section>
+    <form id="composer">
+      <textarea id="prompt" rows="3" placeholder="Ask Claude Code… (Enter to send, Shift+Enter for a new line)"></textarea>
+      <div class="controls">
+        <select id="model" title="Model"></select>
+        <select id="mode" title="Permission mode">
+          <option value="default">Ask before actions</option>
+          <option value="acceptEdits">Auto-accept edits</option>
+          <option value="plan">Plan only</option>
+          <option value="auto">Auto</option>
+          <option value="bypassPermissions">Bypass permissions</option>
+        </select>
+        <span class="spacer"></span>
+        <button type="button" id="stop" class="danger" hidden>Stop</button>
+        <button type="submit" id="send" class="primary">Send</button>
+      </div>
+    </form>
+    <footer id="status">
+      <button id="statusBtn" class="status-btn"><span id="dot" class="dot"></span><span id="statusText">cc-fallback…</span></button>
+      <div id="statusPanel" hidden></div>
+    </footer>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
