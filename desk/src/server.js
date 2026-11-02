@@ -16,6 +16,7 @@ import { authStatus, startLogin } from './auth.js';
 import { OpenCode } from './opencode.js';
 import { environmentsForUi, environmentVars, saveEnvironments } from './environments.js';
 import { claudeLimit, transcript, handoverPrompt, HANDOVER_MODEL } from './handover.js';
+import { stopBrowserServer } from './browser.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const STATE_PATH = join(homedir(), '.cc-desk', 'state.json');
@@ -180,6 +181,7 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
       await saveState(state);
       opencode.browser = state.browser;
       opencode.stopAll(); // its MCP servers come from the config written at start
+      if (!state.browser) stopBrowserServer();
       return json(res, 200, { enabled: state.browser });
     }
     if (req.method === 'GET' && p === '/api/handover') {
@@ -259,7 +261,7 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
   await new Promise((r) => server.listen(port, host, r));
   const appUrl = `http://127.0.0.1:${server.address().port}/?token=${token}`;
   if (!quiet) console.log(`CC Desk: ${appUrl}  (proxy ${proxyUp ? 'on' : 'off'})`);
-  return { server, url: appUrl, token, close: () => { opencode.stopAll(); server.close(); } };
+  return { server, url: appUrl, token, close: () => { opencode.stopAll(); stopBrowserServer(); server.close(); } };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

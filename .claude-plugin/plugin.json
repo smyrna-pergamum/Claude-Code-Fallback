@@ -1,6 +1,6 @@
 {
   "name": "cc-fallback",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Status and control for the cc-fallback proxy: see which model answers, force a provider, scan hardware for local models.",
   "license": "MIT",
   "keywords": ["fallback", "ollama", "local-models", "free-api"]

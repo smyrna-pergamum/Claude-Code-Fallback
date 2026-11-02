@@ -7,7 +7,7 @@ import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { opencodeBrowserConfig } from './browser.js';
+import { opencodeBrowserConfig, ensureBrowserServer } from './browser.js';
 
 const require = createRequire(import.meta.url);
 const DATA = join(homedir(), '.cc-desk', 'opencode');
@@ -58,7 +58,7 @@ export class OpenCode {
       const env = {};
       for (const [k, v] of Object.entries(process.env)) if (!HOST_ENV.test(k)) env[k] = v;
       const xdg = (name) => { const p = join(DATA, name); mkdirSync(p, { recursive: true }); return p; };
-      const browser = this.browser ? opencodeBrowserConfig() : { mcp: {}, permission: {} };
+      const browser = opencodeBrowserConfig(this.browser ? await ensureBrowserServer().catch(() => null) : null);
       const configDir = join(xdg('config'), 'opencode');
       mkdirSync(configDir, { recursive: true });
       writeFileSync(join(configDir, 'opencode.json'), JSON.stringify({ $schema: 'https://opencode.ai/config.json', mcp: browser.mcp }, null, 2));

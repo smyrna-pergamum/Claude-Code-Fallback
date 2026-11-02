@@ -1,7 +1,7 @@
 // One "run" = one prompt sent to Claude Code through the Agent SDK, streamed to the UI as events.
 import { randomUUID } from 'node:crypto';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { claudeBrowserOptions } from './browser.js';
+import { claudeBrowserOptions, ensureBrowserServer } from './browser.js';
 
 // Variables a host (e.g. the Claude desktop app) sets for its own child sessions; they must not
 // leak into ours, or Claude Code would act as that host's child and skip our proxy.
@@ -13,7 +13,7 @@ export function childEnv(baseUrl) {
   if (baseUrl) env.ANTHROPIC_BASE_URL = baseUrl;
   // The attribution line is for Anthropic only; it should not reach free providers.
   env.CLAUDE_CODE_ATTRIBUTION_HEADER = '0';
-  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'cc-desk/0.4.3';
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'cc-desk/0.4.4';
   return env;
 }
 
@@ -109,7 +109,7 @@ export class RunManager {
       emit({ type: 'permission', id: permId, toolName, input, reason: decisionReason || null, canAlways: !!suggestions?.length });
     });
 
-    run.q = query({
+    const startQuery = (browserUrl) => query({
       prompt,
       options: {
         cwd, model: model || undefined, resume: sessionId || undefined, additionalDirectories: dirs.length ? dirs : undefined,
@@ -122,13 +122,16 @@ export class RunManager {
         settings: { env: { ANTHROPIC_BASE_URL: this.baseUrl(), CLAUDE_CODE_ATTRIBUTION_HEADER: '0', ...vars } },
         abortController: run.abort,
         canUseTool,
-        ...(browser ? claudeBrowserOptions() : {}),
+        ...claudeBrowserOptions(browserUrl),
         stderr: (d) => { if (/error/i.test(d)) emit({ type: 'log', text: d.slice(0, 500) }); },
       },
     });
 
     (async () => {
       try {
+        // The shared browser server keeps the window open between messages.
+        const browserUrl = browser ? await ensureBrowserServer().catch(() => null) : null;
+        run.q = startQuery(browserUrl);
         for await (const msg of run.q) {
           if (!run.sessionId && msg.session_id) { run.sessionId = msg.session_id; emit({ type: 'session', sessionId: msg.session_id }); }
           for (const ev of toEvents(msg)) emit(ev);

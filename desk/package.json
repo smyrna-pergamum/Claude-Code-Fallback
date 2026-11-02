@@ -1,7 +1,7 @@
 {
   "name": "cc-desk",
   "productName": "CC Desk",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "Desktop app for Claude Code that runs through the cc-fallback proxy",
   "author": "smyrna-pergamum",
   "homepage": "https://github.com/smyrna-pergamum/Claude-Code-Fallback",
@@ -80,8 +80,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "CC Desk",
-      "artifactName": "CC-Desk-Setup-${version}.exe",
-      "license": "../LICENSE"
+      "artifactName": "CC-Desk-Setup-${version}.exe"
     }
   }
 }
