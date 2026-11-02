@@ -1,4 +1,4 @@
-# cc-fallback
+# Claude Code - Fallback
 
 Claude kullanım limitin dolduğunda **Claude Code** ile çalışmaya devam et.
 
