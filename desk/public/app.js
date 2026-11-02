@@ -391,3 +391,23 @@ if (demo) {
   checkLogin();
   promptEl.focus();
 })();
+
+// ---- environment drawer ----
+const envPanel = $('envPanel');
+async function syncEnv() {
+  $('envCwd').textContent = state.cwd || '—';
+  const em = $('envModel');
+  em.innerHTML = $('model').innerHTML;
+  em.value = $('model').value;
+  $('envMode').value = $('mode').value;
+  $('envProxy').textContent = state.status?.up ? (state.status.lastUsed || 'on') : 'off';
+  const env = await api('/api/env').catch(() => ({ vars: [] }));
+  $('envVars').innerHTML = env.vars.map((v) => `<li><span class="k">${esc(v.name)}</span><span class="v">${esc(v.value)}</span></li>`).join('') || '<li><span class="v">none</span></li>';
+}
+$('envBtn').addEventListener('click', () => { envPanel.hidden = !envPanel.hidden; if (!envPanel.hidden) syncEnv(); });
+envPanel.querySelector('[data-close]').addEventListener('click', () => { envPanel.hidden = true; });
+$('envModel').addEventListener('change', (e) => { $('model').value = e.target.value; });
+$('envMode').addEventListener('change', (e) => { $('mode').value = e.target.value; });
+$('model').addEventListener('change', () => { $('envModel').value = $('model').value; });
+$('mode').addEventListener('change', () => { $('envMode').value = $('mode').value; });
+setInterval(() => { if (!envPanel.hidden) { $('envProxy').textContent = state.status?.up ? (state.status.lastUsed || 'on') : 'off'; } }, 5000);

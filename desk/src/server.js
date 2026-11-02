@@ -19,6 +19,21 @@ const STATE_PATH = join(homedir(), '.cc-desk', 'state.json');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
 const DIRECT = 'https://api.anthropic.com';
 
+const SECRET_RE = /key|token|secret|password|passwd|credential|auth/i;
+const ENV_VARS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'GROQ_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'CC_FALLBACK_BIN', 'PORT'];
+// Names plus values; anything that looks like a secret is masked down to its last 4 characters.
+export function envInfo(env = process.env) {
+  const names = new Set(ENV_VARS);
+  for (const k of Object.keys(env)) if (/^(ANTHROPIC|CC_FALLBACK)_/.test(k)) names.add(k);
+  const vars = [...names].sort().map((name) => {
+    const v = env[name];
+    if (v === undefined || v === '') return { name, value: '(not set)' };
+    if (SECRET_RE.test(name)) return { name, value: v.length > 8 ? `••••${v.slice(-4)}` : '••••' };
+    return { name, value: v.length > 120 ? `${v.slice(0, 117)}...` : v };
+  });
+  return { vars };
+}
+
 function loadState() {
   try { return JSON.parse(readFileSync(STATE_PATH, 'utf8')); } catch { return { recentDirs: [] }; }
 }
@@ -118,6 +133,7 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
     if (req.method === 'POST' && (r = m(/^\/api\/fallback\/(use|reset)$/))) {
       try { return json(res, 200, await proxyCommand(r[1], await body(req))); } catch (e) { return json(res, 502, { error: e.message }); }
     }
+    if (req.method === 'GET' && p === '/api/env') return json(res, 200, envInfo());
     if (req.method === 'POST' && p === '/api/upload') {
       // multipart/form-data single file
       const ct = req.headers['content-type'] || '';

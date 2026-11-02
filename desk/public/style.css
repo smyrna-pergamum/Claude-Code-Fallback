@@ -203,3 +203,19 @@ details.tool.err .body .out { color: var(--bad); }
 .login-bar span { flex: 1; }
 .msg.assistant blockquote { margin: .4em 0; padding: 2px 12px; border-left: 3px solid var(--accent); color: var(--muted); font-size: 13px; }
 .brand .logo { width: 22px; height: 22px; border-radius: 6px; }
+
+/* ---- environment drawer ---- */
+#envPanel { position: fixed; top: 0; right: 0; bottom: 0; width: 320px; background: var(--side); border-left: 1px solid var(--border); z-index: 15; display: flex; flex-direction: column; box-shadow: -8px 0 24px rgba(0,0,0,.08); }
+#envPanel[hidden] { display: none; }
+.env-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 600; }
+.icon-btn { border: 0; background: none; border-radius: 6px; padding: 4px 8px; color: var(--muted); }
+.icon-btn:hover { background: var(--hover); }
+.env-body { padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.env-row { display: flex; align-items: center; gap: 10px; }
+.env-label { font-size: 12px; color: var(--muted); width: 88px; flex: none; }
+.env-val { font-family: var(--mono); font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.env-h3 { font-size: 12px; color: var(--muted); margin: 8px 0 4px; text-transform: uppercase; letter-spacing: .06em; }
+.env-vars { list-style: none; margin: 0; padding: 0; }
+.env-vars li { font-family: var(--mono); font-size: 11.5px; padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+.env-vars .k { color: var(--accent); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.env-vars .v { color: var(--muted); flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
