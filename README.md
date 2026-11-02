@@ -1,4 +1,4 @@
-# cc-fallback
+# Cluade Code -fallback
 
 Keep **Claude Code** working when your Claude usage limit is reached.
 
