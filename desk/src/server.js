@@ -13,6 +13,8 @@ import { RunManager } from './runs.js';
 import { proxyBase, isUp, ensureProxy, proxyStatus, proxyCommand } from './fallback.js';
 import { getProviders, saveProviders, testProvider } from './settings.js';
 import { authStatus, startLogin } from './auth.js';
+import { OpenCode } from './opencode.js';
+import { environmentsForUi, environmentVars, saveEnvironments } from './environments.js';
 
 const PUBLIC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
 const STATE_PATH = join(homedir(), '.cc-desk', 'state.json');
@@ -71,7 +73,8 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
   const token = randomBytes(24).toString('hex');
   const state = loadState();
   let proxyUp = await ensureProxy();
-  const runs = new RunManager({ baseUrl: () => (proxyUp ? proxyBase() : DIRECT) });
+  const opencode = new OpenCode();
+  const runs = new RunManager({ baseUrl: () => (proxyUp ? proxyBase() : DIRECT), opencode });
 
   const json = (res, code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
   const body = async (req) => {
@@ -90,12 +93,29 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
       const dir = url.searchParams.get('dir') || undefined;
       // includeProgrammatic: chats started from this app are SDK sessions too.
       const list = await listSessions({ dir, limit: 200, includeProgrammatic: true }).catch(() => []);
-      return json(res, 200, list.map((s) => ({ id: s.sessionId, title: s.customTitle || s.summary || s.firstPrompt || '(untitled)', at: s.lastModified, cwd: s.cwd, branch: s.gitBranch })));
+      const claude = list.map((s) => ({ id: s.sessionId, title: s.customTitle || s.summary || s.firstPrompt || '(untitled)', at: s.lastModified, cwd: s.cwd, branch: s.gitBranch, engine: 'claude' }));
+      // OpenCode's sessions too, once it has been used (listing them starts its server).
+      const oc = dir && opencode.available && opencode.used ? await opencode.sessions(dir).catch(() => []) : [];
+      return json(res, 200, [...claude, ...oc].sort((a, b) => b.at - a.at));
     }
     let r;
     if (req.method === 'GET' && (r = m(/^\/api\/sessions\/([\w-]+)\/messages$/))) {
-      const msgs = await getSessionMessages(r[1], { dir: url.searchParams.get('dir') || undefined });
+      const dir = url.searchParams.get('dir') || undefined;
+      if (r[1].startsWith('ses_')) return json(res, 200, await opencode.history(r[1], dir));
+      const msgs = await getSessionMessages(r[1], { dir });
       return json(res, 200, historyItems(msgs));
+    }
+    if (req.method === 'GET' && p === '/api/opencode') {
+      if (!opencode.available) return json(res, 200, { available: false, models: [] });
+      try { return json(res, 200, { available: true, models: await opencode.models(url.searchParams.get('dir') || undefined) }); } catch (e) { return json(res, 500, { error: e.message }); }
+    }
+    if (req.method === 'GET' && p === '/api/environments') return json(res, 200, await environmentsForUi());
+    if (req.method === 'POST' && p === '/api/environments') {
+      try {
+        // Variables reach OpenCode when its server starts, so restart the ones that changed.
+        for (const id of await saveEnvironments((await body(req)).environments || [])) opencode.stop(id);
+        return json(res, 200, await environmentsForUi());
+      } catch (e) { return json(res, 400, { error: e.message }); }
     }
     if (req.method === 'POST' && p === '/api/send') {
       const b = await body(req);
@@ -105,7 +125,12 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
       proxyUp = await isUp() || await ensureProxy();
       state.recentDirs = [cwd, ...state.recentDirs.filter((d) => d !== cwd)].slice(0, 10);
       saveState(state).catch(() => {});
-      const run = runs.start({ prompt: b.prompt, cwd, sessionId: b.sessionId, model: b.model, permissionMode: b.permissionMode });
+      const engine = b.engine === 'opencode' ? 'opencode' : 'claude';
+      const envId = b.environment || 'local';
+      const run = runs.start({
+        prompt: b.prompt, cwd, sessionId: b.sessionId, model: b.model, permissionMode: b.permissionMode,
+        engine, envId, vars: await environmentVars(envId),
+      });
       return json(res, 200, { runId: run.id, viaProxy: proxyUp });
     }
     if (req.method === 'GET' && (r = m(/^\/api\/runs\/([\w-]+)\/events$/))) {
@@ -198,7 +223,7 @@ export async function startServer({ port = 0, host = '127.0.0.1', quiet = false 
   await new Promise((r) => server.listen(port, host, r));
   const appUrl = `http://127.0.0.1:${server.address().port}/?token=${token}`;
   if (!quiet) console.log(`CC Desk: ${appUrl}  (proxy ${proxyUp ? 'on' : 'off'})`);
-  return { server, url: appUrl, token, close: () => server.close() };
+  return { server, url: appUrl, token, close: () => { opencode.stopAll(); server.close(); } };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

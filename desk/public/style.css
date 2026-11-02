@@ -219,3 +219,21 @@ details.tool.err .body .out { color: var(--bad); }
 .env-vars li { font-family: var(--mono); font-size: 11.5px; padding: 4px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
 .env-vars .k { color: var(--accent); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .env-vars .v { color: var(--muted); flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- environments editor ---- */
+.env-edit { display: grid; grid-template-columns: 200px 1fr; gap: 16px; min-height: 260px; overflow: hidden; }
+.env-list { list-style: none; margin: 0; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow-y: auto; }
+.env-list li { padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 13.5px; }
+.env-list li:hover { background: var(--hover); }
+.env-list li.active { background: var(--hover); box-shadow: inset 0 0 0 1px var(--border); font-weight: 600; }
+.env-list li.add { color: var(--accent); }
+.env-form { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 2px; }
+.env-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.env-form input { background: var(--card); border: 1px solid var(--border-strong); border-radius: 8px; padding: 7px 10px; color: var(--text); font-size: 13px; }
+.env-form .vars-head, .env-form .var-row { display: grid; grid-template-columns: 1fr 1.4fr 28px; gap: 8px; align-items: center; }
+.env-form .vars-head { font-size: 11.5px; color: var(--faint); }
+.env-form .vn { font-family: var(--mono); }
+.env-form .vars { display: flex; flex-direction: column; gap: 6px; }
+.env-row .btn.small { margin-left: 6px; }
+.agent-pill { font-weight: 600; color: var(--text); }
+.tag.oc { background: color-mix(in srgb, #4a7fd0 18%, transparent); color: #4a7fd0; }

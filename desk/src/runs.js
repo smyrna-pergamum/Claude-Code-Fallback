@@ -48,15 +48,17 @@ export function toEvents(msg) {
 }
 
 export class RunManager {
-  constructor({ baseUrl }) {
+  constructor({ baseUrl, opencode }) {
     this.baseUrl = baseUrl; // () => current ANTHROPIC_BASE_URL
     this.runs = new Map();
+    this.opencode = opencode;
   }
 
-  start({ prompt, cwd, sessionId, model, permissionMode }) {
+  /** engine: 'claude' (default) or 'opencode'; vars: the chosen environment's variables. */
+  start({ prompt, cwd, sessionId, model, permissionMode, engine = 'claude', envId = 'local', vars = {} }) {
     const run = {
-      id: randomUUID(), sessionId: sessionId || null, cwd, events: [], clients: new Set(),
-      pending: new Map(), done: false, q: null, abort: new AbortController(),
+      id: randomUUID(), sessionId: sessionId || null, cwd, engine, events: [], clients: new Set(),
+      pending: new Map(), done: false, q: null, abort: new AbortController(), stop: null,
     };
     this.runs.set(run.id, run);
     const emit = (ev) => {
@@ -65,10 +67,26 @@ export class RunManager {
       for (const c of run.clients) c.write(line);
     };
     run.emit = emit;
+    const finish = () => {
+      run.done = true;
+      emit({ type: 'done' });
+      for (const c of run.clients) c.end();
+      run.clients.clear();
+      setTimeout(() => this.runs.delete(run.id), 10 * 60_000).unref();
+    };
+
+    if (engine === 'opencode') {
+      this.opencode.prompt(run, { prompt, cwd, sessionId, model, permissionMode, envId, vars })
+        .catch((e) => emit({ type: 'error', message: e.message }))
+        .finally(finish);
+      return run;
+    }
 
     const canUseTool = (toolName, input, { signal, suggestions, decisionReason }) => new Promise((resolve) => {
       const permId = randomUUID();
-      run.pending.set(permId, { resolve, suggestions, input });
+      const answer = (decision) => resolve(decision === 'deny' ? { behavior: 'deny', message: 'The user declined this action.' }
+        : { behavior: 'allow', updatedInput: input, ...(decision === 'always' && suggestions?.length ? { updatedPermissions: suggestions } : {}) });
+      run.pending.set(permId, { answer, interrupt: () => resolve({ behavior: 'deny', message: 'Interrupted', interrupt: true }) });
       signal?.addEventListener('abort', () => {
         if (run.pending.delete(permId)) resolve({ behavior: 'deny', message: 'Cancelled' });
       });
@@ -83,7 +101,7 @@ export class RunManager {
         allowDangerouslySkipPermissions: permissionMode === 'bypassPermissions',
         includePartialMessages: true,
         systemPrompt: { type: 'preset', preset: 'claude_code' },
-        env: childEnv(this.baseUrl()),
+        env: { ...childEnv(this.baseUrl()), ...vars },
         abortController: run.abort,
         canUseTool,
         stderr: (d) => { if (/error/i.test(d)) emit({ type: 'log', text: d.slice(0, 500) }); },
@@ -99,11 +117,7 @@ export class RunManager {
       } catch (e) {
         emit({ type: 'error', message: e.message });
       } finally {
-        run.done = true;
-        emit({ type: 'done' });
-        for (const c of run.clients) c.end();
-        run.clients.clear();
-        setTimeout(() => this.runs.delete(run.id), 10 * 60_000).unref();
+        finish();
       }
     })();
     return run;
@@ -126,8 +140,7 @@ export class RunManager {
     const p = run?.pending.get(permId);
     if (!p) return false;
     run.pending.delete(permId);
-    if (decision === 'deny') p.resolve({ behavior: 'deny', message: 'The user declined this action.' });
-    else p.resolve({ behavior: 'allow', updatedInput: p.input, ...(decision === 'always' && p.suggestions?.length ? { updatedPermissions: p.suggestions } : {}) });
+    Promise.resolve(p.answer(decision)).catch((e) => run.emit({ type: 'error', message: e.message }));
     run.emit({ type: 'permission_answered', id: permId, decision });
     return true;
   }
@@ -135,7 +148,8 @@ export class RunManager {
   async interrupt(runId) {
     const run = this.runs.get(runId);
     if (!run || run.done) return false;
-    for (const [id, p] of run.pending) { p.resolve({ behavior: 'deny', message: 'Interrupted', interrupt: true }); run.pending.delete(id); }
+    for (const [id, p] of run.pending) { (p.interrupt || (() => p.answer('deny')))(); run.pending.delete(id); }
+    if (run.stop) { await run.stop(); return true; }
     try { await run.q.interrupt(); } catch { run.abort.abort(); }
     return true;
   }

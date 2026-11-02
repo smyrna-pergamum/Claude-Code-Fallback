@@ -63,6 +63,12 @@ export const DEFAULT_CONFIG = {
       name: 'cloudflare', type: 'openai', baseUrl: 'https://api.cloudflare.com/client/v4/accounts/{env:CLOUDFLARE_ACCOUNT_ID}/ai/v1',
       apiKey: 'env:CLOUDFLARE_API_TOKEN', model: '@cf/openai/gpt-oss-120b', maxTokens: 8192, contextWindow: 128000,
     },
+    {
+      // OpenCode Zen with a paid key (opencode.ai/console). Its free models work only inside
+      // OpenCode itself: in CC Desk, pick the OpenCode agent for those.
+      name: 'opencode-zen', type: 'openai', baseUrl: 'https://opencode.ai/inference/openai/v1',
+      apiKey: 'env:OPENCODE_API_KEY', model: 'glm-5.3-flash', maxTokens: 16000, contextWindow: 200000,
+    },
     // No key needed: free shared pools, slower and may log prompts.
     { name: 'kilo', type: 'openai', keyless: true, baseUrl: 'https://api.kilo.ai/api/gateway', model: 'kilo-auto/free', maxTokens: 16000, contextWindow: 256000, cooldownMinutes: 5 },
     { name: 'llm7', type: 'openai', keyless: true, baseUrl: 'https://api.llm7.io/v1', apiKey: 'env:LLM7_API_KEY', model: 'DeepSeek-V4-Flash-0731', maxTokens: 8192, contextWindow: 400000, maxConcurrent: 1, cooldownMinutes: 2 },

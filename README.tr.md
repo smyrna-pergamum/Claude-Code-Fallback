@@ -38,7 +38,7 @@ CC Desk (masaüstü) ─────┴─► cc-fallback (127.0.0.1:3456) ─�
 - **Donanım taraması** (`cc-fallback scan`): RAM/GPU'na sığan açık kaynak modeli önerir, kurulu yerel sunucuları ve modelleri gösterir; `model: "auto"` kurulu en uygun modeli seçer.
 - Geçişleri sohbette **duyurur** (`⚡ cc-fallback: gemini / gemini-2.5-flash`).
 - **Claude Code eklentisi**: `/fallback-status`, `/fallback-use`, `/fallback-reset`, `/fallback-scan`.
-- **CC Desk masaüstü uygulaması**: Claude Code görünümü, onaylar, eski oturumların (masaüstü uygulaması ve terminal dahil), model seçici, canlı durum ve **Models & API keys** ekranı.
+- **CC Desk masaüstü uygulaması**: Claude Code görünümü, onaylar, eski oturumların (masaüstü uygulaması ve terminal dahil), model seçici, canlı durum, **Models & API keys** ekranı, düzenlenebilir **ortamlar** ve ücretsiz modelleriyle ikinci ajan olarak **OpenCode**.
 - Claude oturum anahtarın yalnızca Anthropic'e iletilir, başka sağlayıcıya asla gönderilmez.
 
 ## İndir (Windows)
@@ -140,6 +140,7 @@ Anahtarları CC Desk'te (**Models & API keys**) ya da ortam değişkeni olarak e
 | Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | dash.cloudflare.com/profile/api-tokens | @cf/openai/gpt-oss-120b |
 | Kilo Code | gerekmez | – | kilo-auto/free |
 | LLM7.io | gerekmez (isteğe bağlı `LLM7_API_KEY`, token.llm7.io) | – | DeepSeek-V4-Flash-0731 |
+| OpenCode Zen (ücretli anahtar) | `OPENCODE_API_KEY` | opencode.ai/console | glm-5.3-flash |
 
 Kilo ve LLM7 ortak ücretsiz havuzlardır: daha yavaştır, sınırlıdır (LLM7'nin günlük kotası var) ve istemleri kaydedebilirler. Liste [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis) temel alınarak hazırlandı.
 
@@ -170,7 +171,9 @@ Yerel açık kaynak modeller uzun görevlerde Claude'dan belirgin şekilde zayı
 
 - Açık ve koyu temada Claude Code görünümü: mesaj baloncukları, çıktısıyla birlikte açılan araç satırları, onay kartları (Allow once / Always allow / Deny), izin modları
 - Klasöre göre oturumların, Claude masaüstü uygulamasında ya da terminalde başlattıkların dahil: birini açıp devam et
-- Model seçici: Claude modelleri ya da herhangi bir ücretsiz sağlayıcının modeli
+- **İki ajan**: Claude Code (proxy üzerinden) ya da uygulamayla gelen **OpenCode**; OpenCode'un ücretsiz modelleri (Big Pickle, GLM-5.3-Flash Free, DeepSeek V4.1 Flash Free…) anahtar istemez, Claude limitine takılmaz; OpenCode da düzenleme ve komutlardan önce sorar
+- **Ortamlar** (Claude Code'daki gibi): mesaj kutusunun yanından seçilen, isimli ortam değişkeni setleri (API anahtarları, PATH eklemeleri, araç ayarları); gizli değerler kaydedildikten sonra gösterilmez
+- Model seçici: Claude modelleri, herhangi bir ücretsiz sağlayıcının modeli ya da OpenCode modelleri
 - Durum çubuğu: hangi sağlayıcının cevap verdiği, Claude limitinin ne zaman açılacağı, sağlayıcı zorlama, Claude'u hemen yeniden deneme
 - **Models & API keys**: hazır sağlayıcılara anahtar ekle, OpenAI veya Anthropic uyumlu herhangi bir API ekle, yerel yapay zekâ ekle (Ollama, LM Studio, llama.cpp ya da herhangi bir yerel adres), bağlantıyı test edip modelleri listele, sağlayıcıları sırala ve aç/kapat; değişiklikler yeniden başlatmadan uygulanır
 

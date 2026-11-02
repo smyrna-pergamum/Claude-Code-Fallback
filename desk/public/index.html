@@ -40,6 +40,11 @@
         <div class="controls">
           <button type="button" id="attach" class="round attach" title="Attach files">+</button>
           <input type="file" id="fileInput" multiple hidden>
+          <select id="agent" class="pill agent-pill" title="Agent">
+            <option value="claude">Claude Code</option>
+            <option value="opencode">OpenCode</option>
+          </select>
+          <select id="envSel" class="pill" title="Environment"></select>
           <select id="mode" class="pill" title="Permission mode">
             <option value="default">Ask before edits</option>
             <option value="acceptEdits">Auto-accept edits</option>
@@ -68,6 +73,8 @@
   <aside id="envPanel" hidden>
     <div class="env-head"><span>Environment</span><button type="button" class="icon-btn" data-close title="Close">✕</button></div>
     <div class="env-body">
+      <div class="env-row"><span class="env-label">Environment</span><select id="envPick" class="pill"></select><button type="button" id="envEdit" class="btn small">Edit…</button></div>
+      <div class="env-row"><span class="env-label">Agent</span><span id="envAgent" class="env-val"></span></div>
       <div class="env-row"><span class="env-label">Folder</span><span id="envCwd" class="env-val"></span></div>
       <div class="env-row"><span class="env-label">Model</span><select id="envModel" class="pill"></select></div>
       <div class="env-row"><span class="env-label">Permission</span><select id="envMode" class="pill">
@@ -78,7 +85,9 @@
         <option value="bypassPermissions">Bypass permissions</option>
       </select></div>
       <div class="env-row"><span class="env-label">Proxy</span><span id="envProxy" class="env-val"></span></div>
-      <h3 class="env-h3">Environment variables</h3>
+      <h3 class="env-h3">This environment's variables</h3>
+      <ul id="envOwnVars" class="env-vars"></ul>
+      <h3 class="env-h3">From this computer</h3>
       <ul id="envVars" class="env-vars"></ul>
     </div>
   </aside>

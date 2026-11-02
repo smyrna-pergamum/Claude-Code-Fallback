@@ -11,7 +11,9 @@ The Claude desktop app gives its sessions its own API address, so it can't use c
 - Claude Code look, light and dark: chat bubbles, streaming answers, compact tool rows (Bash, Read, Edit, …) that open to show input and output
 - Approval cards (Allow once / Always allow / Deny) and permission modes (ask before edits, auto-accept edits, plan, auto, bypass)
 - Sessions per folder, **including those from the Claude desktop app and the terminal**: open any of them and continue
-- Model picker: Claude models, or a free provider's model directly (`provider,model`)
+- **Agent picker**: Claude Code, or **OpenCode** (bundled) with its free models; a chat belongs to one agent, and OpenCode chats are listed with an OpenCode tag
+- **Environments**: named sets of environment variables (stored in `~/.cc-desk/environments.json`), chosen next to the message box or in the ⚙ Env panel; both agents get them, secret values are masked in the UI
+- Model picker: Claude models, or a free provider's model directly (`provider,model`); OpenCode's models when OpenCode is the agent
 - Status bar: which provider answered, Claude's limit countdown, force a provider, retry Claude now; starts the proxy if it isn't running
 - **Models & API keys** (bottom left):
   - add keys to the built-in providers (Gemini, Z AI, NVIDIA, …)
@@ -80,5 +82,7 @@ CC Desk, cc-fallback'in Claude Code için masaüstü uygulaması. Tüm istekleri
 - Açık ve koyu temada Claude Code görünümü; onay kartları ve izin modları.
 - Eski oturumların (masaüstü uygulaması ve terminal dahil) klasöre göre listelenir; birini açıp devam edebilirsin.
 - Model seçici (Claude ya da doğrudan ücretsiz model) ve cc-fallback durum çubuğu.
+- Ajan seçici: Claude Code ya da ücretsiz modelleriyle uygulamaya gömülü **OpenCode**.
+- **Ortamlar**: isimli ortam değişkeni setleri; mesaj kutusunun yanından ya da ⚙ Env panelinden seçilir, iki ajana da geçer.
 - **Models & API keys** (sol altta): hazır sağlayıcılara anahtar ekle, kendi API'ni ekle (OpenAI veya Anthropic uyumlu), yerel yapay zekâ ekle (Ollama, LM Studio, llama.cpp ya da herhangi bir yerel adres), bağlantıyı test et, sırala ve aç/kapat. Kaydedince proxy hemen yeniden yükler. Anahtarlar bu bilgisayarda `~/.cc-fallback/config.json` içinde düz metin olarak saklanır.
 - Windows kurulum dosyası: [son sürüm](https://github.com/smyrna-pergamum/Claude-Code-Fallback/releases/latest) (Node gerekmez; uygulama içinden **Log in to Claude** ile giriş yapılır). Kaynaktan: repo kökünde `npm run desk`. Masaüstü kısayolu için bu klasörde: `cscript scripts\create-shortcut.vbs`.

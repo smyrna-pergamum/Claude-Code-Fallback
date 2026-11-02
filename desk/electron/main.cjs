@@ -6,9 +6,11 @@ const { pathToFileURL } = require('node:url');
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let win;
+let closeServer = () => {};
 async function createWindow() {
   const { startServer } = await import(pathToFileURL(path.join(__dirname, '..', 'src', 'server.js')).href);
-  const { url } = await startServer({ quiet: true });
+  const { url, close } = await startServer({ quiet: true });
+  closeServer = close; // also stops OpenCode servers
   win = new BrowserWindow({
     width: 1280, height: 860, minWidth: 760, minHeight: 520, title: 'CC Desk', autoHideMenuBar: true,
     icon: path.join(__dirname, '..', 'public', 'icon.png'),
@@ -31,3 +33,4 @@ ipcMain.handle('pick-folder', async (_e, current) => {
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 app.whenReady().then(createWindow).catch((e) => { dialog.showErrorBox('CC Desk', e.stack || String(e)); app.quit(); });
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => closeServer());

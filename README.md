@@ -38,7 +38,7 @@ CC Desk (desktop app) ──┴─► cc-fallback (127.0.0.1:3456) ──► Cla
 - **Hardware scan** (`cc-fallback scan`): recommends an open-source local model that fits your RAM/GPU and shows which local runtimes and models you have; `model: "auto"` picks the best installed one.
 - **Announces switches** in the chat (`⚡ cc-fallback: gemini / gemini-2.5-flash`).
 - **Claude Code plugin**: `/fallback-status`, `/fallback-use`, `/fallback-reset`, `/fallback-scan`.
-- **CC Desk desktop app**: Claude Code look, approvals, your old sessions (desktop app and terminal ones too), model picker, live status, and a **Models & API keys** screen.
+- **CC Desk desktop app**: Claude Code look, approvals, your old sessions (desktop app and terminal ones too), model picker, live status, a **Models & API keys** screen, editable **Environments**, and **OpenCode** as a second agent with free models built in.
 - Your Claude login token is only ever forwarded to Anthropic, never to other providers.
 
 ## Download (Windows)
@@ -140,6 +140,7 @@ Add keys in CC Desk (**Models & API keys**) or as environment variables; provide
 | Cloudflare Workers AI | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` | dash.cloudflare.com/profile/api-tokens | @cf/openai/gpt-oss-120b |
 | Kilo Code | none | – | kilo-auto/free |
 | LLM7.io | none (optional `LLM7_API_KEY` from token.llm7.io) | – | DeepSeek-V4-Flash-0731 |
+| OpenCode Zen (paid key) | `OPENCODE_API_KEY` | opencode.ai/console | glm-5.3-flash |
 
 Kilo and LLM7 are shared free pools: slower, rate-limited (LLM7 has a daily quota), and they may log prompts. Provider list based on [awesome-free-llm-apis](https://github.com/mnfst/awesome-free-llm-apis).
 
@@ -170,7 +171,9 @@ Local open-source models are much weaker than Claude at long agentic tasks. They
 
 - Claude Code look in light and dark: chat bubbles, compact tool rows with their output, approval cards (Allow once / Always allow / Deny), permission modes
 - Your sessions per folder, including those started in the Claude desktop app or a terminal: open one and continue
-- Model picker: Claude models, or any free provider's model directly
+- **Two agents**: Claude Code (through the proxy) or **OpenCode**, bundled, with its free models (Big Pickle, GLM-5.3-Flash Free, DeepSeek V4.1 Flash Free, …) that need no key and no Claude limit; OpenCode asks before edits and commands, like Claude Code
+- **Environments**, like Claude Code's: named sets of environment variables (API keys, PATH additions, tool settings) picked next to the message box; secret values are hidden after saving
+- Model picker: Claude models, any free provider's model directly, or OpenCode's models
 - Status bar: which provider answered, Claude's limit countdown, force a provider, retry Claude now
 - **Models & API keys**: add keys to the built-in providers, add any OpenAI- or Anthropic-compatible API, add local AI (Ollama, LM Studio, llama.cpp or any local URL), test the connection and list models, reorder and switch providers on and off; changes apply without restarting
 

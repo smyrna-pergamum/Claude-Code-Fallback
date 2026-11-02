@@ -1,9 +1,14 @@
 // CC Desk UI: sessions sidebar, streaming chat, tool approvals and cc-fallback status.
 import { openSettings } from './settings.js';
+import { openEnvironments } from './environments.js';
 
 const token = new URLSearchParams(location.search).get('token');
 const $ = (id) => document.getElementById(id);
-const state = { cwd: '', sessionId: null, runId: null, source: null, live: null, working: null, tools: new Map(), status: null };
+const state = {
+  cwd: '', sessionId: null, runId: null, source: null, live: null, working: null, tools: new Map(), status: null,
+  engine: 'claude', env: 'local', envs: [], parts: new Map(), ocModels: null,
+};
+const agentName = () => (state.engine === 'opencode' ? 'OpenCode' : 'Claude');
 
 export async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -93,6 +98,22 @@ function render(ev) {
     case 'text':
       if (state.live) { state.live.innerHTML = md(ev.text); state.live.classList.remove('live'); state.live = null; } else add(div('msg assistant', md(ev.text)));
       break;
+    // OpenCode sends text per part: a full snapshot (part_text) or an appended piece (part_delta).
+    case 'part_text':
+    case 'part_delta': {
+      let el = state.parts.get(ev.id);
+      if (!el) {
+        if (!ev.text && ev.type === 'part_text' && !ev.done) break;
+        el = add(div('msg assistant live'));
+        el.dataset.raw = '';
+        state.parts.set(ev.id, el);
+      }
+      el.dataset.raw = ev.type === 'part_text' ? ev.text : el.dataset.raw + ev.text;
+      el.innerHTML = md(el.dataset.raw);
+      el.classList.toggle('live', !ev.done);
+      scroll();
+      break;
+    }
     case 'tool_use': {
       finishLive();
       const d = document.createElement('details');
@@ -138,7 +159,10 @@ function render(ev) {
     default: break;
   }
 }
-function finishLive() { if (state.live) { state.live.classList.remove('live'); state.live = null; } }
+function finishLive() {
+  if (state.live) { state.live.classList.remove('live'); state.live = null; }
+  for (const el of state.parts.values()) el.classList.remove('live');
+}
 
 function renderPermission(ev) {
   finishLive();
@@ -146,7 +170,7 @@ function renderPermission(ev) {
   const card = div('perm msg');
   card.dataset.perm = ev.id;
   const target = toolSummary(ev.input);
-  card.innerHTML = `<div class="q">Allow Claude to use <code>${esc(ev.toolName)}</code>${target ? ` on <code>${esc(target.slice(0, 80))}</code>` : ''}?</div>
+  card.innerHTML = `<div class="q">Allow ${agentName()} to use <code>${esc(ev.toolName)}</code>${target ? ` on <code>${esc(target.slice(0, 80))}</code>` : ''}?</div>
     ${ev.reason ? `<div class="why">${esc(ev.reason)}</div>` : ''}
     <pre></pre>
     <div class="btns"><button class="btn primary" data-d="allow">Allow once</button>
@@ -192,11 +216,14 @@ async function send(text) {
   try {
     const { runId, viaProxy } = await api('/api/send', {
       method: 'POST',
-      body: { prompt: full, cwd: state.cwd, sessionId: state.sessionId, model: $('model').value, effort: $('effort').value || undefined, permissionMode: $('mode').value },
+      body: {
+        prompt: full, cwd: state.cwd, sessionId: state.sessionId, model: $('model').value, effort: $('effort').value || undefined,
+        permissionMode: $('mode').value, engine: state.engine, environment: state.env,
+      },
     });
     pendingFiles = [];
     renderAttachments();
-    if (!viaProxy) add(div('msg meta')).textContent = 'cc-fallback is not running: this message goes straight to Claude, without fallback.';
+    if (!viaProxy && state.engine === 'claude') add(div('msg meta')).textContent = 'cc-fallback is not running: this message goes straight to Claude, without fallback.';
     state.runId = runId;
     state.source = new EventSource(`/api/runs/${runId}/events?token=${token}`);
     state.source.onmessage = (m) => render(JSON.parse(m.data));
@@ -257,7 +284,7 @@ async function loadSessions() {
   ul.innerHTML = '';
   for (const s of list) {
     const li = document.createElement('li');
-    li.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${ago(s.at)}${s.branch ? ` · ${esc(s.branch)}` : ''}</div>`;
+    li.innerHTML = `<div class="t">${esc(s.title)}</div><div class="d">${s.engine === 'opencode' ? '<span class="tag oc">OpenCode</span> ' : ''}${ago(s.at)}${s.branch ? ` · ${esc(s.branch)}` : ''}</div>`;
     li.title = s.title;
     li.dataset.id = s.id;
     if (s.id === state.sessionId) li.classList.add('active');
@@ -268,12 +295,14 @@ async function loadSessions() {
 function clearChat(title) {
   chat.innerHTML = '';
   state.tools.clear();
+  state.parts.clear();
   state.live = null;
   $('title').textContent = title;
 }
 async function openSession(s) {
   if (state.runId) return;
   state.sessionId = s.id;
+  setEngine(s.engine === 'opencode' ? 'opencode' : 'claude');
   clearChat(s.title);
   for (const it of await api(`/api/sessions/${s.id}/messages?dir=${encodeURIComponent(state.cwd)}`)) render(it);
   document.querySelectorAll('#sessions li').forEach((li) => li.classList.toggle('active', li.dataset.id === s.id));
@@ -282,7 +311,9 @@ function newChat() {
   state.sessionId = null;
   clearChat('New session');
   const hint = div('empty', `<span class="spark">✳</span><h2>What should we work on?</h2>
-    <p>in <code>${esc(state.cwd)}</code></p><p>Claude first, free models when the limit is reached.</p>`);
+    <p>in <code>${esc(state.cwd)}</code></p><p>${state.engine === 'opencode'
+    ? 'OpenCode with free models: no Claude limit involved.'
+    : 'Claude first, free models when the limit is reached.'}</p>`);
   hint.id = 'empty';
   chat.appendChild(hint);
   document.querySelectorAll('#sessions li.active').forEach((li) => li.classList.remove('active'));
@@ -305,6 +336,15 @@ $('folderBtn').addEventListener('click', async () => {
 function fillModels(status) {
   const sel = $('model');
   const keep = sel.value;
+  if (state.engine === 'opencode') {
+    const models = state.ocModels || [];
+    const free = models.filter((m) => m.free), other = models.filter((m) => !m.free);
+    sel.innerHTML = !models.length ? '<option value="">Loading OpenCode models…</option>'
+      : (free.length ? `<optgroup label="Free in OpenCode">${free.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</optgroup>` : '')
+        + (other.length ? `<optgroup label="Your OpenCode providers">${other.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')}</optgroup>` : '');
+    sel.value = [...sel.options].some((o) => o.value === keep) ? keep : (models.find((m) => m.id === 'opencode/glm-5.3-flash-free') || models[0])?.id || '';
+    return;
+  }
   const free = (status?.providers || []).filter((p) => p.configured && p.type === 'openai' && p.model !== 'auto');
   sel.innerHTML = `<optgroup label="Claude"><option value="">Default model</option><option value="claude-opus-5-5">Opus 5.5</option><option value="claude-sonnet-5-5">Sonnet 5.5</option><option value="claude-haiku-5-5">Haiku 5.5</option></optgroup>`
     + (free.length ? `<optgroup label="Directly, via cc-fallback">${free.map((p) => `<option value="${esc(`${p.name},${p.model}`)}">${esc(p.name)} · ${esc(p.model)}</option>`).join('')}</optgroup>` : '');
@@ -411,3 +451,60 @@ $('envMode').addEventListener('change', (e) => { $('mode').value = e.target.valu
 $('model').addEventListener('change', () => { $('envModel').value = $('model').value; });
 $('mode').addEventListener('change', () => { $('envMode').value = $('mode').value; });
 setInterval(() => { if (!envPanel.hidden) { $('envProxy').textContent = state.status?.up ? (state.status.lastUsed || 'on') : 'off'; } }, 5000);
+
+// ---- agent: Claude Code or OpenCode ----
+async function loadOpenCodeModels() {
+  if (state.ocModels?.length) return;
+  fillModels(state.status);
+  const r = await api(`/api/opencode?dir=${encodeURIComponent(state.cwd)}`).catch((e) => ({ error: e.message }));
+  if (!r.available) { alert(r.error || 'OpenCode is not available in this build.'); setEngine('claude'); return; }
+  state.ocModels = r.models;
+  fillModels(state.status);
+}
+function setEngine(engine) {
+  state.engine = engine;
+  $('agent').value = engine;
+  $('effort').hidden = engine === 'opencode'; // effort is a Claude Code setting
+  promptEl.placeholder = engine === 'opencode' ? 'Ask OpenCode to do something…' : 'Ask Claude Code to do something…';
+  $('envAgent').textContent = engine === 'opencode' ? 'OpenCode' : 'Claude Code';
+  if (engine === 'opencode') loadOpenCodeModels(); else fillModels(state.status);
+}
+$('agent').addEventListener('change', (e) => {
+  if (state.runId) { e.target.value = state.engine; return; }
+  // A chat belongs to one agent: switching starts a new chat.
+  if (state.sessionId) newChat();
+  setEngine(e.target.value);
+  if (!state.sessionId) newChat();
+  promptEl.focus();
+});
+
+// ---- environments ----
+function fillEnvironments() {
+  const opts = state.envs.map((e) => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('') + '<option value="__edit">Edit environments…</option>';
+  for (const id of ['envSel', 'envPick']) { $(id).innerHTML = opts; $(id).value = state.env; }
+  const env = state.envs.find((e) => e.id === state.env);
+  $('envOwnVars').innerHTML = env?.vars.length
+    ? env.vars.map((v) => `<li><span class="k">${esc(v.name)}</span><span class="v">${esc(v.value)}</span></li>`).join('')
+    : `<li><span class="v">${env?.id === 'local' ? 'none (Local adds nothing)' : 'none'}</span></li>`;
+}
+async function loadEnvironments() {
+  state.envs = await api('/api/environments').catch(() => [{ id: 'local', name: 'Local', vars: [] }]);
+  try { const saved = localStorage.getItem('ccdesk.env'); if (saved && state.envs.some((e) => e.id === saved)) state.env = saved; } catch { /* storage off */ }
+  if (!state.envs.some((e) => e.id === state.env)) state.env = 'local';
+  fillEnvironments();
+}
+function chooseEnvironment(id) {
+  if (id === '__edit') {
+    fillEnvironments();
+    openEnvironments(state.env, (envs, savedId) => { state.envs = envs; if (savedId) chooseEnvironment(savedId); else fillEnvironments(); });
+    return;
+  }
+  state.env = id;
+  try { localStorage.setItem('ccdesk.env', id); } catch { /* storage off */ }
+  fillEnvironments();
+}
+$('envSel').addEventListener('change', (e) => chooseEnvironment(e.target.value));
+$('envPick').addEventListener('change', (e) => chooseEnvironment(e.target.value));
+$('envEdit').addEventListener('click', () => chooseEnvironment('__edit'));
+loadEnvironments();
+setEngine('claude');
