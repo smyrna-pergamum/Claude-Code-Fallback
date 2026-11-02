@@ -331,6 +331,13 @@ export function createProxy(config = loadConfig(), { quiet = false, logPath = LO
     const json = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj, null, 2)); };
     if (req.url === '/_fallback/status') return json(200, status());
     if (req.url === '/_fallback/reset' && req.method === 'POST') { state.cooldown.clear(); log('cooldowns cleared'); return json(200, status()); }
+    if (req.url === '/_fallback/reload' && req.method === 'POST') {
+      // Re-read the config file (e.g. after keys or providers were edited); port/host need a restart.
+      try { config = { ...loadConfig(), port: config.port, host: config.host }; } catch (e) { return json(400, { error: e.message }); }
+      state.localModels.clear();
+      log('config reloaded');
+      return json(200, status());
+    }
     if (req.url === '/_fallback/use' && req.method === 'POST') {
       let target;
       try { target = JSON.parse(raw).provider; } catch { /* empty */ }

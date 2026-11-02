@@ -13,6 +13,7 @@ Usage:
   cc-fallback status                 show providers and cooldowns of the running proxy
   cc-fallback use <target|auto>      force a provider or "provider,model" (e.g. gemini,gemini-2.5-pro); auto = automatic
   cc-fallback reset                  clear all cooldowns (retry Claude now)
+  cc-fallback reload                 re-read the config file without restarting
   cc-fallback init                   write a config file you can edit
   cc-fallback env                    print how to point Claude Code at the proxy manually
 
@@ -125,6 +126,9 @@ switch (cmd) {
     break;
   case 'reset':
     printStatus(await admin('/_fallback/reset', {}));
+    break;
+  case 'reload':
+    printStatus(await admin('/_fallback/reload', {}));
     break;
   case 'init':
     console.log(writeDefaultConfig() ? `Created ${CONFIG_PATH}` : `Already exists: ${CONFIG_PATH}`);
