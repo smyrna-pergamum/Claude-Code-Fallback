@@ -1,6 +1,6 @@
 # CC Desk
 
-A small desktop app for **Claude Code** that sends every request through [cc-fallback](https://github.com/smyrna-pergamum/Claude-Code-Fallback): your Claude subscription is used first, and when its limit is reached free models (Gemini, Kilo, LLM7, NVIDIA, local models…) take over automatically.
+The desktop app of [cc-fallback](../README.md), for **Claude Code**. It sends every request through the cc-fallback proxy: your Claude subscription is used first, and when its limit is reached free models (Gemini, Kilo, LLM7, NVIDIA, local models…) take over automatically.
 
 The Claude desktop app sets its own API address for its sessions, so it can't use cc-fallback. CC Desk runs the real Claude Code (via the [Claude Agent SDK](https://docs.claude.com/en/api/agent-sdk/overview)) and points it at the proxy.
 
@@ -17,7 +17,11 @@ The Claude desktop app sets its own API address for its sessions, so it can't us
 
 ## Install
 
-Needs Node 18+, a logged-in Claude Code (`claude` → log in once) and cc-fallback (installed globally or checked out next to this folder).
+Needs Node 18+ and a logged-in Claude Code (`claude` → log in once). The proxy is the parent folder of this one; the app starts it when needed. From the repository root:
+
+```bash
+cd desk
+```
 
 ```bash
 npm install

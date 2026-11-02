@@ -88,6 +88,14 @@ Yeni özellikler ([claude-code-router](https://github.com/musistudio/claude-code
 - **Modeli kendin seç:** Claude Code içinde `/model gemini,gemini-2.5-pro`; alt ajan isteminin başına `<CCF-MODEL>sağlayıcı,model</CCF-MODEL>`; terminalden `cc-fallback use nvidia,openai/gpt-oss-20b`.
 - `cc-fallback status` sağlayıcı başına başarılı/başarısız sayısını ve bekleyen anahtarları gösterir.
 
+## Masaüstü uygulaması (CC Desk)
+
+Claude masaüstü uygulaması oturumlarına kendi adresini verdiği için proxy'yi kullanamıyor. [`desk/`](desk/) klasöründeki uygulama gerçek Claude Code'u cc-fallback üzerinden çalıştırır: araç kartları ve onaylarla sohbet, klasöre göre eski oturumlar (masaüstü ve terminal dahil), model seçici, canlı durum çubuğu ve anahtar, kendi API'n veya yerel yapay zekâ (Ollama, LM Studio, llama.cpp) eklemek için **Models & API keys** ekranı.
+
+```bash
+npm run desk
+```
+
 ## Gizlilik
 
 Yedek bir sağlayıcı cevap verdiğinde konuşmanız (Claude Code'un okuduğu kodlar dahil) o sağlayıcıya, onun koşullarıyla gönderilir. Önemliyse yerel model kullanın.

@@ -16,7 +16,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test test/*.test.js",
+    "desk": "npm --prefix desk install && npm --prefix desk start"
   },
   "engines": {
     "node": ">=18"

@@ -13,11 +13,11 @@ export function proxyBase() {
   return `http://${cfg.host || '127.0.0.1'}:${cfg.port || 3456}`;
 }
 
-/** cc-fallback's CLI script: $CC_FALLBACK_BIN, a sibling checkout, or the global npm install. */
+/** cc-fallback's CLI script: $CC_FALLBACK_BIN, this repository (desk/ lives inside it), or the global npm install. */
 export function findCli() {
   const candidates = [
     process.env.CC_FALLBACK_BIN,
-    join(here, '..', '..', 'cc-fallback', 'bin', 'cc-fallback.js'),
+    join(here, '..', '..', 'bin', 'cc-fallback.js'),
     process.env.APPDATA && join(process.env.APPDATA, 'npm', 'node_modules', 'cc-fallback', 'bin', 'cc-fallback.js'),
     join(homedir(), '.npm-global', 'lib', 'node_modules', 'cc-fallback', 'bin', 'cc-fallback.js'),
     '/usr/local/lib/node_modules/cc-fallback/bin/cc-fallback.js',

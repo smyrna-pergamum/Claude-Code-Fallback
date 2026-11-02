@@ -171,6 +171,16 @@ Ideas borrowed from [claude-code-router](https://github.com/musistudio/claude-co
 
 Every response carries an `x-cc-fallback-provider` header; `cc-fallback status` shows per-provider ok/failed counts and paused keys.
 
+## Desktop app (CC Desk)
+
+The Claude desktop app sets its own API address for its sessions, so it never goes through the proxy. [`desk/`](desk/) is a small desktop app that runs the real Claude Code (via the Claude Agent SDK) through cc-fallback: chat with tool cards and approvals, your sessions per folder (desktop and terminal ones too), a model picker, a live cc-fallback status bar, and a **Models & API keys** screen to add keys, any OpenAI- or Anthropic-compatible API, or local AI (Ollama, LM Studio, llama.cpp).
+
+```bash
+npm run desk
+```
+
+Details: [desk/README.md](desk/README.md).
+
 ## Privacy
 
 When a fallback provider answers, your conversation (including code Claude Code read) is sent to that provider under its terms. Use local models if that matters. `cc-fallback run` sets `CLAUDE_CODE_ATTRIBUTION_HEADER=0` so Claude Code's attribution block isn't sent as prompt text to other providers.
