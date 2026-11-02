@@ -1,6 +1,6 @@
 {
   "name": "cc-fallback",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Keep Claude Code working when your Claude limit is reached: a local proxy that falls back to free AI APIs, your own APIs and local models, plus CC Desk, a desktop app.",
   "type": "module",
   "bin": {
